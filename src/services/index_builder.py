@@ -1,0 +1,138 @@
+"""FAISS index builder service."""
+
+import json
+import numpy as np
+import faiss
+from pathlib import Path
+from typing import List, Dict, Any
+from datetime import datetime
+
+from ..models.embedding_index import EmbeddingIndex
+from ..services.chunking import DocumentChunk
+from ..services.embedding import EmbeddingService
+from ..lib.config import get_index_path, get_index_metadata_path
+from ..lib.hashing import compute_bytes_hash, compute_string_hash
+from ..lib.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+def build_faiss_index(
+    chunks: List[DocumentChunk],
+    embedding_service: EmbeddingService,
+    index_type: str = "IndexFlatIP",
+    index_name: str = "index"
+) -> tuple[faiss.Index, EmbeddingIndex]:
+    """
+    Build FAISS index from document chunks.
+    
+    Args:
+        chunks: List of DocumentChunk objects
+        embedding_service: EmbeddingService instance
+        index_type: FAISS index type (default: IndexFlatIP)
+        index_name: Name for the index
+        
+    Returns:
+        Tuple of (FAISS index, EmbeddingIndex metadata)
+    """
+    if not chunks:
+        raise ValueError("No chunks provided for indexing")
+    
+    # Generate embeddings for all chunks
+    texts = [chunk.text for chunk in chunks]
+    embeddings = embedding_service.embed_texts(texts)
+    
+    # Get embedding dimension
+    embedding_dim = embedding_service.get_embedding_dimension()
+    
+    # Normalize embeddings for cosine similarity (Inner Product)
+    faiss.normalize_L2(embeddings)
+    
+    # Create FAISS index
+    if index_type == "IndexFlatIP":
+        index = faiss.IndexFlatIP(embedding_dim)
+    elif index_type == "IndexIVFFlat":
+        # Use IVF for larger datasets (requires training)
+        quantizer = faiss.IndexFlatIP(embedding_dim)
+        nlist = min(100, max(10, len(chunks) // 10))  # Number of clusters
+        index = faiss.IndexIVFFlat(quantizer, embedding_dim, nlist)
+        index.train(embeddings)
+    else:
+        raise ValueError(f"Unsupported index type: {index_type}")
+    
+    # Add embeddings to index
+    index.add(embeddings)
+    
+    # Build metadata mapping (vector_index -> document metadata)
+    metadata = {}
+    for i, chunk in enumerate(chunks):
+        metadata[i] = {
+            "meeting_id": chunk.meeting_id,
+            "chunk_index": chunk.chunk_index,
+            "text": chunk.text,
+            "start_idx": chunk.start_idx,
+            "end_idx": chunk.end_idx,
+            **chunk.metadata
+        }
+    
+    # Compute version hash (index configuration + model version)
+    version_data = {
+        "embedding_model": embedding_service.model_name,
+        "embedding_dimension": embedding_dim,
+        "index_type": index_type,
+        "total_documents": len(chunks)
+    }
+    version_hash = compute_string_hash(json.dumps(version_data, sort_keys=True))
+    
+    # Create EmbeddingIndex metadata
+    embedding_index = EmbeddingIndex(
+        index_id=index_name,
+        version_hash=version_hash,
+        embedding_model=embedding_service.model_name,
+        embedding_dimension=embedding_dim,
+        index_type=index_type,
+        metadata=metadata,
+        total_documents=len(chunks),
+        created_at=datetime.utcnow().isoformat() + "Z",
+        index_path=str(get_index_path(index_name))
+    )
+    
+    logger.info(
+        "faiss_index_built",
+        index_id=index_name,
+        total_documents=len(chunks),
+        embedding_dim=embedding_dim,
+        index_type=index_type
+    )
+    
+    return index, embedding_index
+
+
+def save_index(
+    index: faiss.Index,
+    embedding_index: EmbeddingIndex,
+    index_name: str
+) -> None:
+    """
+    Save FAISS index and metadata to disk.
+    
+    Args:
+        index: FAISS index object
+        embedding_index: EmbeddingIndex metadata
+        index_name: Name for the index
+    """
+    # Save FAISS index
+    index_path = get_index_path(index_name)
+    faiss.write_index(index, str(index_path))
+    
+    # Save metadata
+    metadata_path = get_index_metadata_path(index_name)
+    with open(metadata_path, "w", encoding="utf-8") as f:
+        json.dump(embedding_index.to_dict(), f, indent=2, ensure_ascii=False)
+    
+    logger.info(
+        "index_saved",
+        index_path=str(index_path),
+        metadata_path=str(metadata_path)
+    )
+

@@ -24,12 +24,12 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create project structure per implementation plan (src/, tests/, data/ directories)
-- [ ] T002 Initialize Python 3.11 project with requirements.txt
-- [ ] T003 [P] Add dependencies to requirements.txt: sentence-transformers, faiss-cpu, transformers, typer, structlog, pytest, gensim, spacy
-- [ ] T004 [P] Create .gitignore for audit_logs/, indexes/, __pycache__, .venv/, *.pyc
-- [ ] T005 [P] Setup pytest configuration in pytest.ini or pyproject.toml
-- [ ] T006 Create README.md with project overview and quickstart link
+- [X] T001 Create project structure per implementation plan (src/, tests/, data/ directories)
+- [X] T002 Initialize Python 3.11 project with requirements.txt
+- [X] T003 [P] Add dependencies to requirements.txt: sentence-transformers, faiss-cpu, transformers, typer, structlog, pytest, gensim, spacy
+- [X] T004 [P] Create .gitignore for audit_logs/, indexes/, __pycache__, .venv/, *.pyc
+- [X] T005 [P] Setup pytest configuration in pytest.ini or pyproject.toml
+- [X] T006 Create README.md with project overview and quickstart link
 
 ---
 
@@ -39,13 +39,13 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T007 Create base configuration management in src/lib/config.py (seed defaults, model paths, etc.)
-- [ ] T008 Implement SHA-256 hashing utility in src/lib/hashing.py (FR-011)
-- [ ] T009 [P] Implement PII detection utility using spaCy in src/lib/pii_detection.py (FR-012)
-- [ ] T010 [P] Implement citation parsing/formating utility in src/lib/citation.py (format: [meeting_id | date | speaker])
-- [ ] T011 Setup structlog JSON logging infrastructure in src/lib/logging.py
-- [ ] T012 Create audit log directory structure and persistence logic in src/lib/audit.py
-- [ ] T013 Create base data validation utilities in src/lib/validation.py (JSON validation, ISO 8601 date validation)
+- [X] T007 Create base configuration management in src/lib/config.py (seed defaults, model paths, etc.)
+- [X] T008 Implement SHA-256 hashing utility in src/lib/hashing.py (FR-011)
+- [X] T009 [P] Implement PII detection utility using spaCy in src/lib/pii_detection.py (FR-012)
+- [X] T010 [P] Implement citation parsing/formating utility in src/lib/citation.py (format: [meeting_id | date | speaker])
+- [X] T011 Setup structlog JSON logging infrastructure in src/lib/logging.py
+- [X] T012 Create audit log directory structure and persistence logic in src/lib/audit.py
+- [X] T013 Create base data validation utilities in src/lib/validation.py (JSON validation, ISO 8601 date validation)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -68,20 +68,20 @@
 
 ### Implementation for User Story 1
 
-- [ ] T018 [P] [US1] Create MeetingRecord model in src/models/meeting_record.py (id, date, participants, transcript, decisions, tags)
-- [ ] T019 [P] [US1] Create EmbeddingIndex model in src/models/embedding_index.py (index_id, version_hash, embedding_model, metadata, etc.)
-- [ ] T020 [P] [US1] Create RAGQuery model in src/models/rag_query.py (query_id, user_input, retrieved_chunks, output, citations, evidence_found, etc.)
-- [ ] T021 [US1] Implement JSON ingestion service in src/services/ingestion.py (read, validate MeetingRecord, compute SHA-256 hash)
-- [ ] T022 [US1] Implement document chunking service in src/services/chunking.py (chunk transcript with overlap, metadata preservation)
-- [ ] T023 [US1] Implement embedding service using sentence-transformers in src/services/embedding.py (local model, deterministic seeds)
-- [ ] T024 [US1] Implement FAISS index builder service in src/services/index_builder.py (create FAISS index, store metadata mapping, version hash)
-- [ ] T025 [US1] Implement FAISS retrieval service in src/services/retrieval.py (load index, query embedding, top-k similarity search)
-- [ ] T026 [US1] Implement RAG generation service in src/services/rag_generator.py (LLM with retrieved context only, deterministic inference)
-- [ ] T027 [US1] Implement citation extraction service in src/services/citation_extractor.py (format: [meeting_id | date | speaker], traceable to retrieved chunks)
-- [ ] T028 [US1] Implement evidence checking service in src/services/evidence_checker.py ("No evidence found" when no credible evidence - FR-008)
-- [ ] T029 [US1] Implement index CLI command in src/cli/index.py (index command: INPUT_DIR, OUTPUT_INDEX, options for embedding-model, chunk-size, seed, hash-only, verify-hash, redact-pii)
-- [ ] T030 [US1] Implement query CLI command in src/cli/query.py (query command: INDEX_FILE, QUERY, options for model, model-version, top-k, seed, output-format, user-id)
-- [ ] T031 [US1] Create main CLI entry point in src/cli/main.py (typer app, register index and query commands)
+- [X] T018 [P] [US1] Create MeetingRecord model in src/models/meeting_record.py (id, date, participants, transcript, decisions, tags)
+- [X] T019 [P] [US1] Create EmbeddingIndex model in src/models/embedding_index.py (index_id, version_hash, embedding_model, metadata, etc.)
+- [X] T020 [P] [US1] Create RAGQuery model in src/models/rag_query.py (query_id, user_input, retrieved_chunks, output, citations, evidence_found, etc.)
+- [X] T021 [US1] Implement JSON ingestion service in src/services/ingestion.py (read, validate MeetingRecord, compute SHA-256 hash)
+- [X] T022 [US1] Implement document chunking service in src/services/chunking.py (chunk transcript with overlap, metadata preservation)
+- [X] T023 [US1] Implement embedding service using sentence-transformers in src/services/embedding.py (local model, deterministic seeds)
+- [X] T024 [US1] Implement FAISS index builder service in src/services/index_builder.py (create FAISS index, store metadata mapping, version hash)
+- [X] T025 [US1] Implement FAISS retrieval service in src/services/retrieval.py (load index, query embedding, top-k similarity search)
+- [X] T026 [US1] Implement RAG generation service in src/services/rag_generator.py (LLM with retrieved context only, deterministic inference)
+- [X] T027 [US1] Implement citation extraction service in src/services/citation_extractor.py (format: [meeting_id | date | speaker], traceable to retrieved chunks)
+- [X] T028 [US1] Implement evidence checking service in src/services/evidence_checker.py ("No evidence found" when no credible evidence - FR-008)
+- [X] T029 [US1] Implement index CLI command in src/cli/index.py (index command: INPUT_DIR, OUTPUT_INDEX, options for embedding-model, chunk-size, seed, hash-only, verify-hash, redact-pii)
+- [X] T030 [US1] Implement query CLI command in src/cli/query.py (query command: INDEX_FILE, QUERY, options for model, model-version, top-k, seed, output-format, user-id)
+- [X] T031 [US1] Create main CLI entry point in src/cli/main.py (typer app, register index and query commands)
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently. Users can index meeting JSON and query the RAG system with citation-grounded answers.
 
