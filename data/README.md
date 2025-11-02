@@ -1,53 +1,99 @@
 # Using Your Own Meeting Data
 
-## Data Format
+## Supported Formats
 
-Each meeting must be a JSON file following this format:
+The Archive-RAG system now supports **two formats**:
+
+### Format 1: Legacy Format (Simple)
 
 ```json
 {
-  "id": "unique-meeting-id",
+  "id": "meeting_001",
   "date": "2024-03-15T10:00:00Z",
-  "participants": ["Participant 1", "Participant 2"],
+  "participants": ["Alice", "Bob", "Charlie"],
   "transcript": "Full meeting transcript text here...",
   "decisions": ["Decision 1", "Decision 2"],
   "tags": ["tag1", "tag2"]
 }
 ```
 
-### Required Fields
+### Format 2: New Format (Archives Workgroup Format)
 
-- **`id`** (string): Unique meeting identifier (e.g., "meeting_001", "2024-03-15-board-meeting")
-- **`date`** (string): ISO 8601 datetime format (e.g., "2024-03-15T10:00:00Z")
-- **`participants`** (array): List of participant names or IDs (must have at least one)
-- **`transcript`** (string): Full meeting transcript text (cannot be empty)
+```json
+{
+  "workgroup": "Archives Workgroup",
+  "workgroup_id": "05ddaaf0-1dde-4d84-a722-f82c8479a8e9",
+  "meetingInfo": {
+    "typeOfMeeting": "Monthly",
+    "date": "2025-01-08",
+    "host": "Stephen [QADAO]",
+    "documenter": "CallyFromAuron",
+    "peoplePresent": "André, CallyFromAuron, Stephen [QADAO]",
+    "purpose": "Regular monthly meeting",
+    "meetingVideoLink": "https://...",
+    "workingDocs": [
+      {
+        "title": "Document Title",
+        "link": "https://..."
+      }
+    ]
+  },
+  "agendaItems": [
+    {
+      "status": "carry over",
+      "actionItems": [
+        {
+          "text": "Action item text",
+          "assignee": "Name",
+          "dueDate": "Date",
+          "status": "todo"
+        }
+      ],
+      "decisionItems": [
+        {
+          "decision": "Decision text extracted as transcript content",
+          "effect": "mayAffectOtherPeople"
+        }
+      ]
+    }
+  ],
+  "tags": {
+    "topicsCovered": "topic1, topic2",
+    "emotions": "interesting, friendly"
+  },
+  "type": "Custom",
+  "noSummaryGiven": false,
+  "canceledSummary": false
+}
+```
 
-### Optional Fields
+## How It Works
 
-- **`decisions`** (array): List of decisions made in the meeting
-- **`tags`** (array): Categorization tags for the meeting
+The system automatically detects which format you're using:
+
+- **If you provide `workgroup_id` and `meetingInfo`**: Uses new format
+  - Extracts `id` from `workgroup_id`
+  - Extracts `date` from `meetingInfo.date` (converts YYYY-MM-DD to ISO 8601)
+  - Extracts `participants` from `meetingInfo.peoplePresent` (comma-separated string)
+  - Extracts `transcript` from all `agendaItems[].decisionItems[].decision` texts
+  - Extracts `decisions` from decision items
+
+- **If you provide `id`, `date`, `participants`, `transcript`**: Uses legacy format
 
 ## Step-by-Step Instructions
 
 ### 1. Prepare Your Meeting JSON Files
 
-Create JSON files following the format above. You can:
-
-- Replace files in `data/sample/` directory
-- Create a new directory (e.g., `data/my-meetings/`)
-- Use any directory structure you prefer
+Create JSON files following either format above.
 
 ### 2. Index Your Data
 
 ```bash
-# Replace sample data
-archive-rag index data/sample/ indexes/my-index.faiss
-
-# Or use your own directory
-archive-rag index data/my-meetings/ indexes/my-index.faiss
+# Index your files
+archive-rag index your-data-directory/ indexes/my-index.faiss
 
 # With PII redaction (recommended)
-archive-rag index --redact-pii data/my-meetings/ indexes/my-index.faiss
+archive-rag index --redact-pii your-data-directory/ indexes/my-index.faiss
 ```
 
 ### 3. Query Your Data
@@ -56,35 +102,32 @@ archive-rag index --redact-pii data/my-meetings/ indexes/my-index.faiss
 archive-rag query indexes/my-index.faiss "Your question here"
 ```
 
-## Date Format Examples
+## Date Format
 
-Valid ISO 8601 formats:
-- `"2024-03-15T10:00:00Z"`
-- `"2024-03-15T10:00:00+00:00"`
-- `"2024-03-15"` (date only)
+- **Legacy format**: ISO 8601 datetime (e.g., `"2024-03-15T10:00:00Z"`)
+- **New format**: YYYY-MM-DD date (e.g., `"2025-01-08"`) - automatically converted to ISO 8601
 
-## Tips
+## Participants Format
 
-1. **Multiple Files**: Put all your meeting JSON files in one directory - the indexer will process all `.json` files
-2. **Large Transcripts**: The system automatically chunks long transcripts (default: 512 characters with 50 character overlap)
-3. **PII Redaction**: Use `--redact-pii` flag if your transcripts contain personal information
-4. **Validation**: Invalid JSON files will be skipped with error messages - check the output for warnings
+- **Legacy format**: Array of strings (e.g., `["Alice", "Bob"]`)
+- **New format**: Comma-separated string (e.g., `"André, CallyFromAuron, Stephen [QADAO]"`) - automatically parsed into array
+
+## Transcript Content
+
+- **Legacy format**: Direct `transcript` field
+- **New format**: Extracted from `agendaItems[].decisionItems[].decision` - all decision texts are combined into a single transcript
 
 ## Example Directory Structure
 
 ```
 data/
 ├── my-meetings/
-│   ├── meeting_2024_01_15.json
-│   ├── meeting_2024_02_20.json
-│   └── meeting_2024_03_10.json
+│   ├── meeting-2024-01-15.json  (legacy format)
+│   ├── meeting-2025-01-08.json   (new format)
+│   └── ...
 └── sample/  (example files)
     ├── meeting_001.json
     └── meeting_002.json
 ```
 
-Then index with:
-```bash
-archive-rag index data/my-meetings/ indexes/my-meetings.faiss
-```
-
+You can mix both formats in the same directory - the system handles them automatically!

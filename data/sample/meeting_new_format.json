@@ -1,0 +1,27 @@
+{
+  "workgroup": "Archives Workgroup",
+  "workgroup_id": "05ddaaf0-1dde-4d84-a722-f82c8479a8e9",
+  "meetingInfo": {
+    "typeOfMeeting": "Monthly",
+    "date": "2025-01-08",
+    "host": "Stephen [QADAO]",
+    "documenter": "CallyFromAuron",
+    "peoplePresent": "Andr\u00e9, CallyFromAuron, Stephen [QADAO], LadyTempestt",
+    "purpose": "Regular monthly meeting"
+  },
+  "agendaItems": [
+    {
+      "status": "carry over",
+      "decisionItems": [
+        {
+          "decision": "Gorga presented Gamers Guild representation.",
+          "effect": "mayAffectOtherPeople"
+        },
+        {
+          "decision": "Stephen showed updates to the AI workflow issue.",
+          "effect": "affectsOnlyThisWorkgroup"
+        }
+      ]
+    }
+  ]
+}

@@ -36,9 +36,20 @@ def ingest_meeting_file(
     # Validate JSON
     data = validate_json_file(file_path)
     
-    # Validate required fields
-    required_fields = ["id", "date", "participants", "transcript"]
-    validate_required_fields(data, required_fields)
+    # Validate required fields (support both new and legacy formats)
+    # Check if new format (workgroup_id + meetingInfo) or legacy format (id + date + participants + transcript)
+    has_new_format = "workgroup_id" in data and "meetingInfo" in data
+    has_legacy_format = "id" in data and "date" in data and "participants" in data and "transcript" in data
+    
+    if not has_new_format and not has_legacy_format:
+        # Try to validate with flexible check (let MeetingRecord handle normalization)
+        # Don't raise error here - let Pydantic validation handle it
+        pass
+    
+    # Legacy format: explicit check
+    if has_legacy_format:
+        required_fields = ["id", "date", "participants", "transcript"]
+        validate_required_fields(data, required_fields)
     
     # Create MeetingRecord
     meeting_record = MeetingRecord(**data)
