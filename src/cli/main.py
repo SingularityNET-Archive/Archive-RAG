@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from .index import index_command
-from .query import query_command
+from .query import query_command, query_workgroup_command, query_person_command
 from .audit_view import audit_view_command
 from .topic_model import topic_model_command
 from .extract_entities import extract_entities_command
@@ -131,6 +131,25 @@ def evaluate(
         seed=seed,
         output_format=output_format
     )
+
+
+@app.command()
+def query_workgroup(
+    workgroup_id: str = typer.Argument(..., help="Workgroup ID (UUID)"),
+    output_format: str = typer.Option("text", "--output-format", help="Output format: text or json")
+):
+    """Query all meetings for a specific workgroup using entity-based data model."""
+    query_workgroup_command(workgroup_id=workgroup_id, output_format=output_format)
+
+
+@app.command()
+def query_person(
+    person_id: str = typer.Argument(..., help="Person ID (UUID)"),
+    action_items: bool = typer.Option(False, "--action-items", help="Query action items assigned to this person"),
+    output_format: str = typer.Option("text", "--output-format", help="Output format: text or json")
+):
+    """Query information for a specific person, optionally including action items."""
+    query_person_command(person_id=person_id, action_items=action_items, output_format=output_format)
 
 
 @app.command()

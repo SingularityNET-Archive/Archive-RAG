@@ -51,6 +51,7 @@ audit_logs/
 indexes/
 *.faiss
 *.faiss.metadata.json
+entities/
 
 # Testing
 .pytest_cache/
