@@ -31,7 +31,9 @@ class RemoteEmbeddingService:
         self.api_url = api_url
         self.api_key = api_key
         self.model_name = model_name
-        self.embedding_dimension = 384  # Default for MiniLM-L6-v2
+        # Default dimension will be detected from first embedding call
+        # Common defaults: 384 (MiniLM-L6-v2), 1536 (text-embedding-3-small)
+        self.embedding_dimension = None  # Will be set after first embedding call
         
         # Determine API type from URL
         if api_url:
@@ -103,12 +105,23 @@ class RemoteEmbeddingService:
                 batch_embeddings = [item.embedding for item in response.data]
                 all_embeddings.extend(batch_embeddings)
             except Exception as e:
-                logger.error("openai_embedding_failed", error=str(e), batch_size=len(batch))
+                error_str = str(e)
+                # Check for quota errors (429) and log as warning instead of error
+                if "429" in error_str or "insufficient_quota" in error_str.lower() or "quota" in error_str.lower():
+                    logger.warning(
+                        "openai_embedding_quota_exceeded",
+                        error=error_str,
+                        batch_size=len(batch),
+                        suggestion="OpenAI quota exceeded for embeddings. Consider checking billing or using local embeddings."
+                    )
+                else:
+                    logger.error("openai_embedding_failed", error=error_str, batch_size=len(batch))
                 raise
         
         # Determine dimension from first embedding
         if all_embeddings:
             self.embedding_dimension = len(all_embeddings[0])
+            logger.debug("openai_embedding_dimension_detected", dimension=self.embedding_dimension, model=self.model_name)
         
         # Convert to numpy array and ensure float32 (required by FAISS)
         embeddings_array = np.array(all_embeddings, dtype=np.float32)
@@ -212,6 +225,7 @@ class RemoteEmbeddingService:
         # Determine dimension from first embedding
         if all_embeddings:
             self.embedding_dimension = len(all_embeddings[0])
+            logger.debug("openai_embedding_dimension_detected", dimension=self.embedding_dimension, model=self.model_name)
         
         # Convert to numpy array and ensure float32 (required by FAISS)
         embeddings_array = np.array(all_embeddings, dtype=np.float32)
@@ -250,6 +264,7 @@ class RemoteEmbeddingService:
         # Determine dimension from first embedding
         if all_embeddings:
             self.embedding_dimension = len(all_embeddings[0])
+            logger.debug("openai_embedding_dimension_detected", dimension=self.embedding_dimension, model=self.model_name)
         
         # Convert to numpy array and ensure float32 (required by FAISS)
         embeddings_array = np.array(all_embeddings, dtype=np.float32)
@@ -262,6 +277,28 @@ class RemoteEmbeddingService:
         
         Returns:
             Embedding dimension
+        
+        Raises:
+            ValueError: If dimension not yet determined (no embeddings generated yet)
         """
+        if self.embedding_dimension is None:
+            # Try to determine dimension by making a test call
+            try:
+                test_embedding = self.embed_text("test")
+                self.embedding_dimension = len(test_embedding)
+                logger.debug("embedding_dimension_determined_from_test", dimension=self.embedding_dimension)
+            except Exception as e:
+                # If test fails, use model-specific defaults
+                if "text-embedding-3-small" in self.model_name.lower():
+                    self.embedding_dimension = 1536
+                    logger.debug("using_default_dimension_for_model", model=self.model_name, dimension=self.embedding_dimension)
+                elif "text-embedding-3-large" in self.model_name.lower():
+                    self.embedding_dimension = 3072
+                    logger.debug("using_default_dimension_for_model", model=self.model_name, dimension=self.embedding_dimension)
+                else:
+                    # Default fallback
+                    self.embedding_dimension = 384
+                    logger.warning("using_fallback_dimension", model=self.model_name, dimension=self.embedding_dimension)
+        
         return self.embedding_dimension
 

@@ -49,7 +49,7 @@ class EmbeddingService:
                     api_key=api_key,
                     model_name=effective_model_name
                 )
-                logger.info("embedding_service_remote_initialized", model_name=model_name, api_url=api_url)
+                logger.info("embedding_service_remote_initialized", model_name=effective_model_name, api_url=api_url)
                 self.model = None  # No local model when using remote
             except ImportError:
                 logger.error("remote_embedding_service_unavailable", api_url=api_url)
