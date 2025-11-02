@@ -8,6 +8,7 @@ from ..services.ingestion import ingest_meeting_directory
 from ..services.chunking import chunk_transcript
 from ..services.embedding import create_embedding_service
 from ..services.index_builder import build_faiss_index, save_index
+from ..services.audit_writer import AuditWriter
 from ..lib.config import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_CHUNK_SIZE,
@@ -16,7 +17,6 @@ from ..lib.config import (
 )
 from ..lib.pii_detection import create_pii_detector
 from ..lib.logging import get_logger
-from ..lib.audit import write_audit_log
 
 logger = get_logger(__name__)
 
@@ -105,22 +105,21 @@ def index_command(
         # Save index
         save_index(index, embedding_index, output_index)
         
-        # Create audit log
-        audit_data = {
-            "operation": "index",
-            "input_dir": str(input_dir),
-            "output_index": output_index,
-            "embedding_model": embedding_model,
-            "chunk_size": chunk_size,
-            "chunk_overlap": chunk_overlap,
-            "total_meetings": len(meeting_records),
-            "total_chunks": len(all_chunks),
-            "embedding_dimension": embedding_index.embedding_dimension
-        }
-        
-        import uuid
-        query_id = str(uuid.uuid4())
-        write_audit_log(query_id, audit_data)
+        # Create audit log for indexing operation
+        audit_writer = AuditWriter()
+        audit_writer.write_index_audit_log(
+            operation="index",
+            input_dir=str(input_dir),
+            output_index=output_index,
+            metadata={
+                "embedding_model": embedding_model,
+                "chunk_size": chunk_size,
+                "chunk_overlap": chunk_overlap,
+                "total_meetings": len(meeting_records),
+                "total_chunks": len(all_chunks),
+                "embedding_dimension": embedding_index.embedding_dimension
+            }
+        )
         
         typer.echo(f"Index created successfully: {output_index}")
         typer.echo(f"Total meetings indexed: {len(meeting_records)}")

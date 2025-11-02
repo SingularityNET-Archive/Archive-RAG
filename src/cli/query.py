@@ -6,14 +6,10 @@ import typer
 import uuid
 from datetime import datetime
 
-from ..services.retrieval import query_index, load_index
-from ..services.embedding import create_embedding_service
-from ..services.rag_generator import create_rag_generator
-from ..services.citation_extractor import extract_citations, format_citations_as_text
-from ..services.evidence_checker import check_evidence, get_no_evidence_message
-from ..models.rag_query import RAGQuery, RetrievedChunk, Citation
+from ..services.query_service import create_query_service
+from ..services.citation_extractor import format_citations_as_text
 from ..lib.config import DEFAULT_TOP_K, DEFAULT_SEED
-from ..lib.audit import write_audit_log
+from ..lib.auth import get_user_id
 from ..lib.logging import get_logger
 
 logger = get_logger(__name__)
@@ -57,62 +53,20 @@ def query_command(
     Query the RAG system and get evidence-bound answers with citations.
     """
     try:
-        # Generate query ID
-        query_id = str(uuid.uuid4())
+        # Get user ID (from CLI flag or SSO context)
+        resolved_user_id = get_user_id(user_id)
         
-        # Load index
-        index, embedding_index = load_index(index_file)
+        # Create query service
+        query_service = create_query_service(model_name=model, seed=seed)
         
-        # Create embedding service
-        embedding_service = create_embedding_service(
-            model_name=embedding_index.embedding_model
+        # Execute query (automatically creates audit log)
+        rag_query = query_service.execute_query(
+            index_name=index_file,
+            query_text=query_text,
+            top_k=top_k,
+            user_id=resolved_user_id,
+            model_version=model_version
         )
-        
-        # Query index
-        retrieved_chunks = query_index(
-            query_text,
-            embedding_service,
-            index_file,
-            top_k=top_k
-        )
-        
-        # Check evidence
-        evidence_found = check_evidence(retrieved_chunks)
-        
-        # Generate answer
-        rag_generator = create_rag_generator(
-            model_name=model,
-            seed=seed
-        )
-        
-        if evidence_found:
-            answer = rag_generator.generate(query_text, retrieved_chunks)
-        else:
-            answer = get_no_evidence_message()
-        
-        # Extract citations
-        citations = extract_citations(retrieved_chunks)
-        
-        # Create RAGQuery model
-        rag_query = RAGQuery(
-            query_id=query_id,
-            user_input=query_text,
-            timestamp=datetime.utcnow().isoformat() + "Z",
-            retrieved_chunks=[
-                RetrievedChunk(**chunk) for chunk in retrieved_chunks
-            ],
-            output=answer,
-            citations=citations,
-            model_version=model_version or rag_generator.model_name,
-            embedding_version=embedding_index.embedding_model,
-            user_id=user_id,
-            evidence_found=evidence_found,
-            audit_log_path=f"audit_logs/query-{query_id}.json"
-        )
-        
-        # Create audit log
-        audit_data = rag_query.to_dict()
-        audit_log_path = write_audit_log(query_id, audit_data)
         
         # Format output
         if output_format == "json":

@@ -61,10 +61,10 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T014 [P] [US1] Contract test for index command in tests/contract/test_index_command.py
-- [ ] T015 [P] [US1] Contract test for query command in tests/contract/test_query_command.py
-- [ ] T016 [P] [US1] Integration test for query journey in tests/integration/test_query_flow.py
-- [ ] T017 [P] [US1] Unit test for citation format validation in tests/unit/test_citation_format.py
+- [X] T014 [P] [US1] Contract test for index command in tests/contract/test_index_command.py
+- [X] T015 [P] [US1] Contract test for query command in tests/contract/test_query_command.py
+- [X] T016 [P] [US1] Integration test for query journey in tests/integration/test_query_flow.py
+- [X] T017 [P] [US1] Unit test for citation format validation in tests/unit/test_citation_format.py
 
 ### Implementation for User Story 1
 
@@ -103,13 +103,13 @@
 
 ### Implementation for User Story 2
 
-- [ ] T035 [US2] Enhance query flow to create audit log entry after query completion in src/services/query_service.py
-- [ ] T036 [US2] Implement audit log writer service in src/services/audit_writer.py (immutable JSON logs, structured format with query, retrieved sources, model version, output, user ID)
-- [ ] T037 [US2] Integrate SSO user ID extraction in src/lib/auth.py (FR-013 - extract user ID from SSO context for audit logs)
-- [ ] T038 [US2] Implement audit log retention logic in src/services/audit_retention.py (3-year retention per FR-014)
-- [ ] T039 [US2] Implement audit-view CLI command in src/cli/audit_view.py (view logs, filter by query-id, user-id, date-from, date-to, format, export - supports peer review workflow per SC-006)
-- [ ] T040 [US2] Register audit-view command in src/cli/main.py
-- [ ] T041 [US2] Add audit logging to index command (log indexing operations)
+- [X] T035 [US2] Enhance query flow to create audit log entry after query completion in src/services/query_service.py
+- [X] T036 [US2] Implement audit log writer service in src/services/audit_writer.py (immutable JSON logs, structured format with query, retrieved sources, model version, output, user ID)
+- [X] T037 [US2] Integrate SSO user ID extraction in src/lib/auth.py (FR-013 - extract user ID from SSO context for audit logs)
+- [X] T038 [US2] Implement audit log retention logic in src/services/audit_retention.py (3-year retention per FR-014)
+- [X] T039 [US2] Implement audit-view CLI command in src/cli/audit_view.py (view logs, filter by query-id, user-id, date-from, date-to, format, export - supports peer review workflow per SC-006)
+- [X] T040 [US2] Register audit-view command in src/cli/main.py
+- [X] T041 [US2] Add audit logging to index command (log indexing operations)
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently. Every query produces an immutable audit log entry with full provenance.
 
@@ -132,14 +132,14 @@
 
 ### Implementation for User Story 3
 
-- [ ] T046 [US3] Implement topic modeling service using gensim in src/services/topic_modeling.py (LDA with deterministic seeds, advisory only)
-- [ ] T047 [US3] Implement BERTopic-lite alternative in src/services/topic_modeling_bertopic.py (optional method, advisory only)
-- [ ] T048 [US3] Enhance entity extraction service using spaCy in src/services/entity_extraction.py (NER, aggregate by type and frequency, PII redaction before extraction)
-- [ ] T049 [US3] Implement topic-model CLI command in src/cli/topic_model.py (topic-model command: INDEX_FILE, OUTPUT_DIR, options for num-topics, method, seed, no-pii)
-- [ ] T050 [US3] Implement extract-entities CLI command in src/cli/extract_entities.py (extract-entities command: INDEX_FILE, OUTPUT_DIR, options for model, entity-types, min-frequency, no-pii)
-- [ ] T051 [US3] Register topic-model and extract-entities commands in src/cli/main.py
-- [ ] T052 [US3] Add audit logging for topic modeling operations (advisory logging per constitution)
-- [ ] T053 [US3] Add audit logging for entity extraction operations (advisory logging per constitution)
+- [X] T046 [US3] Implement topic modeling service using gensim in src/services/topic_modeling.py (LDA with deterministic seeds, advisory only)
+- [X] T047 [US3] Implement BERTopic-lite alternative in src/services/topic_modeling_bertopic.py (optional method, advisory only)
+- [X] T048 [US3] Enhance entity extraction service using spaCy in src/services/entity_extraction.py (NER, aggregate by type and frequency, PII redaction before extraction)
+- [X] T049 [US3] Implement topic-model CLI command in src/cli/topic_model.py (topic-model command: INDEX_FILE, OUTPUT_DIR, options for num-topics, method, seed, no-pii)
+- [X] T050 [US3] Implement extract-entities CLI command in src/cli/extract_entities.py (extract-entities command: INDEX_FILE, OUTPUT_DIR, options for model, entity-types, min-frequency, no-pii)
+- [X] T051 [US3] Register topic-model and extract-entities commands in src/cli/main.py
+- [X] T052 [US3] Add audit logging for topic modeling operations (advisory logging per constitution)
+- [X] T053 [US3] Add audit logging for entity extraction operations (advisory logging per constitution)
 
 **Checkpoint**: At this point, User Stories 1, 2, AND 3 should all work independently. Users can discover topics and entities from the archive with advisory results logged for auditability.
 
@@ -162,19 +162,19 @@
 
 ### Implementation for User Story 4
 
-- [ ] T058 [P] [US4] Create EvaluationCase model in src/models/evaluation_case.py (case_id, prompt, ground_truth, expected_citations, evaluation_metrics, etc.)
-- [ ] T059 [US4] Create sample benchmark dataset in data/benchmarks/eval.json (EvaluationCase format with prompts, ground truth, expected citations)
-- [ ] T060 [US4] Implement citation accuracy scorer in src/services/citation_scorer.py (validate citation format, compare against expected citations, compute accuracy ≥90% per SC-001)
-- [ ] T061 [US4] Implement factuality scorer in src/services/factuality_scorer.py (compare output against ground truth, detect hallucinations - must be 0 per SC-002)
-- [ ] T062 [US4] Implement retrieval latency measurement in src/services/latency_measurement.py (<2s target per SC-003)
-- [ ] T063 [US4] Implement evaluation runner service in src/services/evaluation_runner.py (load benchmark, run queries, compute metrics, aggregate results)
-- [ ] T064 [US4] Implement evaluation report generator in src/services/report_generator.py (format results in report or JSON format)
-- [ ] T065 [US4] Implement evaluate CLI command in src/cli/evaluate.py (evaluate command: INDEX_FILE, BENCHMARK_FILE, OUTPUT_DIR, options for model, model-version, seed, output-format)
-- [ ] T066 [US4] Register evaluate command in src/cli/main.py
-- [ ] T067 [US4] Add audit logging for evaluation operations
-- [ ] T068 [US4] Implement reproducible audit log validation in tests/integration/test_audit_reproducibility.py (validate SC-004: same query + seed produces identical audit log)
-- [ ] T069 [US4] Add entity extraction precision validation to evaluation runner in src/services/evaluation_runner.py (compute and validate ≥85% precision per SC-005)
-- [ ] T070 [US4] Implement peer review workflow validation in tests/integration/test_peer_review_workflow.py (validate SC-006: peer reviewer validates claim in <3 CLI steps using audit-view)
+- [X] T058 [P] [US4] Create EvaluationCase model in src/models/evaluation_case.py (case_id, prompt, ground_truth, expected_citations, evaluation_metrics, etc.)
+- [X] T059 [US4] Create sample benchmark dataset in data/benchmarks/eval.json (EvaluationCase format with prompts, ground truth, expected citations)
+- [X] T060 [US4] Implement citation accuracy scorer in src/services/citation_scorer.py (validate citation format, compare against expected citations, compute accuracy ≥90% per SC-001)
+- [X] T061 [US4] Implement factuality scorer in src/services/factuality_scorer.py (compare output against ground truth, detect hallucinations - must be 0 per SC-002)
+- [X] T062 [US4] Implement retrieval latency measurement in src/services/latency_measurement.py (<2s target per SC-003)
+- [X] T063 [US4] Implement evaluation runner service in src/services/evaluation_runner.py (load benchmark, run queries, compute metrics, aggregate results)
+- [X] T064 [US4] Implement evaluation report generator in src/services/report_generator.py (format results in report or JSON format)
+- [X] T065 [US4] Implement evaluate CLI command in src/cli/evaluate.py (evaluate command: INDEX_FILE, BENCHMARK_FILE, OUTPUT_DIR, options for model, model-version, seed, output-format)
+- [X] T066 [US4] Register evaluate command in src/cli/main.py
+- [X] T067 [US4] Add audit logging for evaluation operations
+- [X] T068 [US4] Implement reproducible audit log validation in tests/integration/test_audit_reproducibility.py (validate SC-004: same query + seed produces identical audit log)
+- [X] T069 [US4] Add entity extraction precision validation to evaluation runner in src/services/evaluation_runner.py (compute and validate ≥85% precision per SC-005)
+- [X] T070 [US4] Implement peer review workflow validation in tests/integration/test_peer_review_workflow.py (validate SC-006: peer reviewer validates claim in <3 CLI steps using audit-view)
 
 **Checkpoint**: At this point, all user stories should now be independently functional. The system includes full evaluation capabilities to measure and maintain citation accuracy and factuality.
 
@@ -184,19 +184,19 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T071 [P] Create sample meeting JSON files in data/sample/ for testing
-- [ ] T072 [P] Add comprehensive error handling across all CLI commands (invalid JSON, index not found, model loading failure, etc.)
-- [ ] T073 [P] Implement deterministic seed management across all services (embeddings, LLM inference, FAISS, topic modeling)
-- [ ] T074 [P] Add version tracking for models in index metadata (embedding version, LLM version for reproducibility)
-- [ ] T075 [P] Optimize FAISS index for <2s retrieval latency (IndexFlatIP or IndexIVFFlat for 10k docs)
-- [ ] T076 [P] Implement memory optimization for <4GB RAM target (quantized models, lazy loading)
-- [ ] T077 [P] Add golden file tests for citation format validation in tests/golden/test_citation_format.py
-- [ ] T078 [P] Add integration tests for end-to-end query flow with real meeting JSON in tests/integration/test_full_rag_flow.py
-- [ ] T079 Update quickstart.md validation (verify all commands work as documented)
-- [ ] T080 [P] Add unit tests for utility functions in tests/unit/ (hashing, PII detection, citation parsing, validation)
-- [ ] T081 [P] Security hardening: validate input sanitization, secure hash storage, PII redaction verification
-- [ ] T082 [P] Performance testing: validate <2s retrieval latency for 10k docs, <4GB RAM usage
-- [ ] T083 Documentation updates: ensure README.md reflects quickstart.md, add architecture diagrams if needed
+- [X] T071 [P] Create sample meeting JSON files in data/sample/ for testing
+- [X] T072 [P] Add comprehensive error handling across all CLI commands (invalid JSON, index not found, model loading failure, etc.)
+- [X] T073 [P] Implement deterministic seed management across all services (embeddings, LLM inference, FAISS, topic modeling)
+- [X] T074 [P] Add version tracking for models in index metadata (embedding version, LLM version for reproducibility)
+- [X] T075 [P] Optimize FAISS index for <2s retrieval latency (IndexFlatIP or IndexIVFFlat for 10k docs)
+- [X] T076 [P] Implement memory optimization for <4GB RAM target (quantized models, lazy loading)
+- [X] T077 [P] Add golden file tests for citation format validation in tests/golden/test_citation_format.py
+- [X] T078 [P] Add integration tests for end-to-end query flow with real meeting JSON in tests/integration/test_full_rag_flow.py
+- [X] T079 Update quickstart.md validation (verify all commands work as documented)
+- [X] T080 [P] Add unit tests for utility functions in tests/unit/ (hashing, PII detection, citation parsing, validation)
+- [X] T081 [P] Security hardening: validate input sanitization, secure hash storage, PII redaction verification
+- [X] T082 [P] Performance testing: validate <2s retrieval latency for 10k docs, <4GB RAM usage
+- [X] T083 Documentation updates: ensure README.md reflects quickstart.md, add architecture diagrams if needed
 
 ---
 

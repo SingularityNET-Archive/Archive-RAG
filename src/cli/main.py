@@ -6,6 +6,10 @@ from typing import Optional
 
 from .index import index_command
 from .query import query_command
+from .audit_view import audit_view_command
+from .topic_model import topic_model_command
+from .extract_entities import extract_entities_command
+from .evaluate import evaluate_command
 
 app = typer.Typer(
     name="archive-rag",
@@ -64,6 +68,90 @@ def query(
         seed=seed,
         output_format=output_format,
         user_id=user_id
+    )
+
+
+@app.command()
+def topic_model(
+    index_file: str = typer.Argument(..., help="Path to FAISS index file"),
+    output_dir: str = typer.Argument(..., help="Directory to write topic modeling results"),
+    num_topics: int = typer.Option(10, "--num-topics", help="Number of topics to discover"),
+    method: str = typer.Option("lda", "--method", help="Topic modeling method: lda or bertopic"),
+    seed: int = typer.Option(42, "--seed", help="Random seed for reproducibility"),
+    no_pii: bool = typer.Option(False, "--no-pii", help="Skip PII detection and redaction")
+):
+    """Run topic modeling on meeting archive to discover high-level topics."""
+    topic_model_command(
+        index_file=index_file,
+        output_dir=output_dir,
+        num_topics=num_topics,
+        method=method,
+        seed=seed,
+        no_pii=no_pii
+    )
+
+
+@app.command()
+def extract_entities(
+    index_file: str = typer.Argument(..., help="Path to FAISS index file"),
+    output_dir: str = typer.Argument(..., help="Directory to write entity extraction results"),
+    model: str = typer.Option("en_core_web_sm", "--model", help="spaCy model name"),
+    entity_types: Optional[str] = typer.Option(None, "--entity-types", help="Comma-separated entity types to extract"),
+    min_frequency: int = typer.Option(2, "--min-frequency", help="Minimum frequency for entity inclusion"),
+    no_pii: bool = typer.Option(False, "--no-pii", help="Skip PII detection and redaction")
+):
+    """Extract named entities from meeting archive."""
+    extract_entities_command(
+        index_file=index_file,
+        output_dir=output_dir,
+        model=model,
+        entity_types=entity_types,
+        min_frequency=min_frequency,
+        no_pii=no_pii
+    )
+
+
+@app.command()
+def evaluate(
+    index_file: str = typer.Argument(..., help="Path to FAISS index file"),
+    benchmark_file: str = typer.Argument(..., help="Path to evaluation benchmark JSON file"),
+    output_dir: str = typer.Argument(..., help="Directory to write evaluation results"),
+    model: Optional[str] = typer.Option(None, "--model", help="LLM model name"),
+    model_version: Optional[str] = typer.Option(None, "--model-version", help="LLM model version"),
+    seed: int = typer.Option(42, "--seed", help="Random seed for reproducibility"),
+    output_format: str = typer.Option("report", "--output-format", help="Results format: json or report")
+):
+    """Run evaluation suite to measure factuality and citation compliance."""
+    evaluate_command(
+        index_file=index_file,
+        benchmark_file=benchmark_file,
+        output_dir=output_dir,
+        model=model,
+        model_version=model_version,
+        seed=seed,
+        output_format=output_format
+    )
+
+
+@app.command()
+def audit_view(
+    log_file: Optional[Path] = typer.Argument(None, help="Path to specific audit log file"),
+    query_id: Optional[str] = typer.Option(None, "--query-id", help="Filter by query ID"),
+    user_id: Optional[str] = typer.Option(None, "--user-id", help="Filter by user ID"),
+    date_from: Optional[str] = typer.Option(None, "--date-from", help="Filter logs from date (ISO 8601)"),
+    date_to: Optional[str] = typer.Option(None, "--date-to", help="Filter logs to date (ISO 8601)"),
+    output_format: str = typer.Option("text", "--format", help="Output format: text or json"),
+    export: Optional[Path] = typer.Option(None, "--export", help="Export filtered logs to file")
+):
+    """View and analyze audit logs."""
+    audit_view_command(
+        log_file=log_file,
+        query_id=query_id,
+        user_id=user_id,
+        date_from=date_from,
+        date_to=date_to,
+        output_format=output_format,
+        export=export
     )
 
 

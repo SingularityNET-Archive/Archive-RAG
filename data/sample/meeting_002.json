@@ -1,0 +1,14 @@
+{
+  "id": "meeting_002",
+  "date": "2024-04-20T14:30:00Z",
+  "participants": ["Alice", "David", "Eve"],
+  "transcript": "Today we reviewed the Q2 project proposals. Three proposals were accepted: Project Alpha focuses on infrastructure improvements, Project Beta addresses customer service enhancements, and Project Gamma involves process automation. We assigned team leads for each project and set quarterly milestones.",
+  "decisions": [
+    "Accept Project Alpha (infrastructure)",
+    "Accept Project Beta (customer service)",
+    "Accept Project Gamma (automation)",
+    "Assign team leads and set milestones"
+  ],
+  "tags": ["projects", "Q2", "planning"]
+}
+

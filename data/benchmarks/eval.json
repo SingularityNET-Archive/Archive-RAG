@@ -1,0 +1,29 @@
+[
+  {
+    "case_id": "case_001",
+    "prompt": "What decisions were made about budget allocation?",
+    "ground_truth": "The budget committee decided to allocate $100k to the marketing department. Additional funding of $50k was approved for Q2 projects.",
+    "expected_citations": [
+      {
+        "meeting_id": "meeting_001",
+        "date": "2024-03-15",
+        "speaker": "Alice",
+        "excerpt": "budget allocation"
+      }
+    ]
+  },
+  {
+    "case_id": "case_002",
+    "prompt": "Who participated in the planning meeting?",
+    "ground_truth": "The planning meeting included Alice, Bob, and Charlie as participants.",
+    "expected_citations": [
+      {
+        "meeting_id": "meeting_001",
+        "date": "2024-03-15",
+        "speaker": null,
+        "excerpt": "participants"
+      }
+    ]
+  }
+]
+
