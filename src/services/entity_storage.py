@@ -26,6 +26,7 @@ from src.models.meeting import Meeting
 from src.models.person import Person
 from src.models.agenda_item import AgendaItem
 from src.models.action_item import ActionItem
+from src.models.document import Document
 
 T = TypeVar("T", bound=BaseEntity)
 
@@ -335,4 +336,27 @@ def save_action_item(action_item: ActionItem) -> None:
     
     # Save action item entity
     save_entity(action_item, ENTITIES_ACTION_ITEMS_DIR)
+
+
+def save_document(document: Document) -> None:
+    """
+    Save document entity to JSON file.
+    
+    Args:
+        document: Document entity instance
+    
+    Raises:
+        ValueError: If document validation fails or meeting doesn't exist
+        IOError: If file write fails
+    """
+    # Validate meeting_id foreign key exists
+    validate_foreign_key(
+        document.meeting_id,
+        ENTITIES_MEETINGS_DIR,
+        Meeting,
+        foreign_key_name="meeting_id"
+    )
+    
+    # Save document entity
+    save_entity(document, ENTITIES_DOCUMENTS_DIR)
 

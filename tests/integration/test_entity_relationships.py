@@ -9,12 +9,14 @@ from src.models.meeting import Meeting, MeetingType
 from src.models.person import Person
 from src.models.agenda_item import AgendaItem
 from src.models.action_item import ActionItem, ActionItemStatus
+from src.models.document import Document
 from src.services.entity_storage import (
     save_workgroup,
     save_meeting,
     save_person,
     save_agenda_item,
     save_action_item,
+    save_document,
     load_entity,
     init_entity_storage_directories
 )
@@ -23,6 +25,7 @@ from src.lib.config import (
     ENTITIES_WORKGROUPS_DIR,
     ENTITIES_MEETINGS_DIR,
     ENTITIES_PEOPLE_DIR,
+    ENTITIES_DOCUMENTS_DIR,
     ENTITIES_AGENDA_ITEMS_DIR,
     ENTITIES_ACTION_ITEMS_DIR,
     ENTITIES_INDEX_DIR
@@ -40,6 +43,10 @@ class TestEntityRelationships:
         lib.config.ENTITIES_DIR = tmp_path / "entities"
         lib.config.ENTITIES_WORKGROUPS_DIR = lib.config.ENTITIES_DIR / "workgroups"
         lib.config.ENTITIES_MEETINGS_DIR = lib.config.ENTITIES_DIR / "meetings"
+        lib.config.ENTITIES_PEOPLE_DIR = lib.config.ENTITIES_DIR / "people"
+        lib.config.ENTITIES_DOCUMENTS_DIR = lib.config.ENTITIES_DIR / "documents"
+        lib.config.ENTITIES_AGENDA_ITEMS_DIR = lib.config.ENTITIES_DIR / "agenda_items"
+        lib.config.ENTITIES_ACTION_ITEMS_DIR = lib.config.ENTITIES_DIR / "action_items"
         lib.config.ENTITIES_INDEX_DIR = lib.config.ENTITIES_DIR / "_index"
         
         # Initialize storage directories
@@ -244,4 +251,117 @@ class TestEntityRelationships:
         person3_actions = query_service.get_action_items_by_person(person3.id)
         assert len(person3_actions) == 0
         assert person3_actions == []
+    
+    def test_query_documents_by_meeting(self):
+        """Test querying documents for meeting - independent test for US3."""
+        # Create a workgroup and meeting
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        save_meeting(meeting)
+        
+        # Create multiple documents for this meeting
+        document1 = Document(
+            meeting_id=meeting.id,
+            title="Budget Report",
+            link="https://example.com/budget.pdf"
+        )
+        document2 = Document(
+            meeting_id=meeting.id,
+            title="Planning Document",
+            link="https://example.com/planning.pdf"
+        )
+        document3 = Document(
+            meeting_id=meeting.id,
+            title="Summary Notes",
+            link="https://example.com/summary.pdf"
+        )
+        
+        save_document(document1)
+        save_document(document2)
+        save_document(document3)
+        
+        # Query documents for meeting
+        query_service = EntityQueryService()
+        documents = query_service.get_documents_by_meeting(meeting.id)
+        
+        # Verify all documents are returned
+        assert len(documents) == 3
+        
+        # Verify all documents belong to the specified meeting
+        document_ids = {doc.id for doc in documents}
+        assert document1.id in document_ids
+        assert document2.id in document_ids
+        assert document3.id in document_ids
+        
+        # Verify all documents have correct meeting_id
+        for document in documents:
+            assert document.meeting_id == meeting.id
+        
+        # Verify all documents have titles and links
+        for document in documents:
+            assert document.title is not None
+            assert document.link is not None
+        
+        # Verify exact count matches
+        assert len(documents) == 3, f"Expected 3 documents, got {len(documents)}"
+    
+    def test_query_documents_by_meeting_empty(self):
+        """Test querying documents for meeting with no documents."""
+        # Create a workgroup and meeting
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15"
+        )
+        save_meeting(meeting)
+        
+        # Query documents for meeting with no documents
+        query_service = EntityQueryService()
+        documents = query_service.get_documents_by_meeting(meeting.id)
+        
+        # Should return empty list
+        assert len(documents) == 0
+        assert documents == []
+    
+    def test_query_documents_multiple_meetings(self):
+        """Test querying documents for multiple meetings."""
+        # Create a workgroup and meetings
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting1 = Meeting(workgroup_id=workgroup.id, date="2024-03-15")
+        meeting2 = Meeting(workgroup_id=workgroup.id, date="2024-04-15")
+        save_meeting(meeting1)
+        save_meeting(meeting2)
+        
+        # Create documents for each meeting
+        doc1_m1 = Document(meeting_id=meeting1.id, title="Doc 1", link="https://example.com/doc1.pdf")
+        doc2_m1 = Document(meeting_id=meeting1.id, title="Doc 2", link="https://example.com/doc2.pdf")
+        doc1_m2 = Document(meeting_id=meeting2.id, title="Doc 3", link="https://example.com/doc3.pdf")
+        
+        save_document(doc1_m1)
+        save_document(doc2_m1)
+        save_document(doc1_m2)
+        
+        # Query documents for each meeting
+        query_service = EntityQueryService()
+        docs_m1 = query_service.get_documents_by_meeting(meeting1.id)
+        docs_m2 = query_service.get_documents_by_meeting(meeting2.id)
+        
+        # Verify correct documents are returned
+        assert len(docs_m1) == 2
+        assert len(docs_m2) == 1
+        
+        # Verify no cross-contamination
+        m1_ids = {doc.id for doc in docs_m1}
+        m2_ids = {doc.id for doc in docs_m2}
+        assert m1_ids.isdisjoint(m2_ids)
 

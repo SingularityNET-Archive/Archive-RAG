@@ -20,6 +20,7 @@ from src.models.meeting import Meeting
 from src.models.workgroup import Workgroup
 from src.models.person import Person
 from src.models.action_item import ActionItem
+from src.models.document import Document
 
 logger = get_logger(__name__)
 
@@ -191,5 +192,102 @@ class EntityQueryService:
             
         except Exception as e:
             logger.error("query_action_items_by_person_failed", person_id=str(person_id), error=str(e))
+            raise
+    
+    def get_documents_by_meeting(self, meeting_id: UUID) -> List[Document]:
+        """
+        Get all documents linked to a specific meeting.
+        
+        Args:
+            meeting_id: UUID of meeting
+        
+        Returns:
+            List of Document entities linked to the meeting
+        
+        Raises:
+            ValueError: If entity loading fails
+        """
+        logger.info("query_documents_by_meeting_start", meeting_id=str(meeting_id))
+        
+        try:
+            # Scan documents directory for documents with matching meeting_id
+            documents = []
+            
+            for document_file in ENTITIES_DOCUMENTS_DIR.glob("*.json"):
+                try:
+                    document_id = UUID(document_file.stem)
+                    document = load_entity(document_id, ENTITIES_DOCUMENTS_DIR, Document)
+                    if document and document.meeting_id == meeting_id:
+                        documents.append(document)
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_documents_loading_failed", document_id=document_file.stem, error=str(e))
+                    continue
+            
+            logger.info("query_documents_by_meeting_success", meeting_id=str(meeting_id), document_count=len(documents))
+            return documents
+            
+        except Exception as e:
+            logger.error("query_documents_by_meeting_failed", meeting_id=str(meeting_id), error=str(e))
+            raise
+    
+    def get_documents_by_meeting_with_validation(self, meeting_id: UUID) -> List[Document]:
+        """
+        Get all documents linked to a meeting with link validation on access.
+        
+        Validates document links on access (not during ingestion) as per FR-004.
+        Broken/inaccessible links are detected but do not block retrieval (FR-012).
+        
+        Args:
+            meeting_id: UUID of meeting
+        
+        Returns:
+            List of Document entities with link validation status
+        
+        Raises:
+            ValueError: If entity loading fails
+        """
+        import requests
+        from urllib.parse import urlparse
+        
+        logger.info("query_documents_by_meeting_with_validation_start", meeting_id=str(meeting_id))
+        
+        try:
+            documents = self.get_documents_by_meeting(meeting_id)
+            
+            # Validate links on access (T052)
+            validated_documents = []
+            for document in documents:
+                try:
+                    # Check if link is accessible (head request to validate)
+                    parsed = urlparse(str(document.link))
+                    if not parsed.scheme or not parsed.netloc:
+                        logger.warning("query_documents_invalid_url", document_id=str(document.id), link=str(document.link))
+                        # Still include document but mark as potentially broken
+                        validated_documents.append(document)
+                        continue
+                    
+                    # Attempt HEAD request to validate accessibility
+                    try:
+                        response = requests.head(str(document.link), timeout=5, allow_redirects=True)
+                        is_accessible = response.status_code < 400
+                        if not is_accessible:
+                            logger.warning("query_documents_link_inaccessible", document_id=str(document.id), link=str(document.link), status_code=response.status_code)
+                        # Still include document even if link is inaccessible (FR-012)
+                        validated_documents.append(document)
+                    except (requests.RequestException, Exception) as e:
+                        # Link validation failed but don't block retrieval
+                        logger.warning("query_documents_link_validation_failed", document_id=str(document.id), link=str(document.link), error=str(e))
+                        validated_documents.append(document)
+                        
+                except Exception as e:
+                    # Log error but still include document (don't block retrieval)
+                    logger.warning("query_documents_validation_error", document_id=str(document.id), error=str(e))
+                    validated_documents.append(document)
+            
+            logger.info("query_documents_by_meeting_with_validation_success", meeting_id=str(meeting_id), document_count=len(validated_documents))
+            return validated_documents
+            
+        except Exception as e:
+            logger.error("query_documents_by_meeting_with_validation_failed", meeting_id=str(meeting_id), error=str(e))
             raise
 

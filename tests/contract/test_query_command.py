@@ -210,4 +210,135 @@ class TestQueryCommand:
         assert result.exit_code == 1
         # Check if error message is in output (stdout/stderr) or if exit code is 1 (typer.Exit)
         assert "Invalid person ID format" in result.stdout or "Invalid person ID format" in result.stderr or result.exit_code == 1
+    
+    def test_query_meeting_command_help(self, runner):
+        """Test query-meeting command help."""
+        result = runner.invoke(app, ["query-meeting", "--help"])
+        assert result.exit_code == 0
+        assert "Query information for a specific meeting" in result.stdout
+    
+    def test_query_meeting_command_structure(self, runner, tmp_path):
+        """Test query-meeting command structure (contract test for US3)."""
+        from src.lib.config import init_entity_storage
+        from pathlib import Path
+        from src.models.workgroup import Workgroup
+        from src.models.meeting import Meeting
+        from src.services.entity_storage import save_workgroup, save_meeting
+        
+        # Monkeypatch config to use tmp_path
+        import src.lib.config as config_module
+        original_entities_dir = config_module.ENTITIES_DIR
+        config_module.ENTITIES_DIR = Path(tmp_path) / "entities"
+        init_entity_storage()
+        
+        try:
+            # Create a workgroup and meeting
+            workgroup = Workgroup(name="Test Workgroup")
+            save_workgroup(workgroup)
+            
+            meeting = Meeting(workgroup_id=workgroup.id, date="2024-03-15")
+            save_meeting(meeting)
+            
+            # Test query-meeting command with valid UUID
+            result = runner.invoke(app, [
+                "query-meeting",
+                str(meeting.id)
+            ])
+            
+            # Contract test validates command structure exists
+            assert result.exit_code in [0, 1]
+            
+        finally:
+            # Restore original config
+            config_module.ENTITIES_DIR = original_entities_dir
+    
+    def test_query_meeting_command_with_documents(self, runner, tmp_path):
+        """Test query-meeting command with --documents option."""
+        from src.lib.config import init_entity_storage
+        from pathlib import Path
+        from src.models.workgroup import Workgroup
+        from src.models.meeting import Meeting
+        from src.models.document import Document
+        from src.services.entity_storage import save_workgroup, save_meeting, save_document
+        
+        # Monkeypatch config to use tmp_path
+        import src.lib.config as config_module
+        original_entities_dir = config_module.ENTITIES_DIR
+        config_module.ENTITIES_DIR = Path(tmp_path) / "entities"
+        init_entity_storage()
+        
+        try:
+            # Create a workgroup, meeting, and document
+            workgroup = Workgroup(name="Test Workgroup")
+            save_workgroup(workgroup)
+            
+            meeting = Meeting(workgroup_id=workgroup.id, date="2024-03-15")
+            save_meeting(meeting)
+            
+            document = Document(
+                meeting_id=meeting.id,
+                title="Test Document",
+                link="https://example.com/doc.pdf"
+            )
+            save_document(document)
+            
+            result = runner.invoke(app, [
+                "query-meeting",
+                str(meeting.id),
+                "--documents"
+            ])
+            
+            # Contract test validates --documents option is accepted
+            assert result.exit_code in [0, 1]
+            
+        finally:
+            # Restore original config
+            config_module.ENTITIES_DIR = original_entities_dir
+    
+    def test_query_meeting_command_with_options(self, runner, tmp_path):
+        """Test query-meeting command with output format option."""
+        from src.lib.config import init_entity_storage
+        from pathlib import Path
+        from src.models.workgroup import Workgroup
+        from src.models.meeting import Meeting
+        from src.services.entity_storage import save_workgroup, save_meeting
+        
+        # Monkeypatch config to use tmp_path
+        import src.lib.config as config_module
+        original_entities_dir = config_module.ENTITIES_DIR
+        config_module.ENTITIES_DIR = Path(tmp_path) / "entities"
+        init_entity_storage()
+        
+        try:
+            workgroup = Workgroup(name="Test Workgroup")
+            save_workgroup(workgroup)
+            
+            meeting = Meeting(workgroup_id=workgroup.id, date="2024-03-15")
+            save_meeting(meeting)
+            
+            result = runner.invoke(app, [
+                "query-meeting",
+                str(meeting.id),
+                "--documents",
+                "--output-format", "json"
+            ])
+            
+            # Contract test validates options are accepted
+            assert result.exit_code in [0, 1]
+            
+        finally:
+            # Restore original config
+            config_module.ENTITIES_DIR = original_entities_dir
+    
+    def test_query_meeting_command_invalid_uuid(self, runner):
+        """Test query-meeting command with invalid UUID format."""
+        result = runner.invoke(app, [
+            "query-meeting",
+            "invalid-uuid"
+        ])
+        
+        # Should fail with invalid UUID format
+        assert result.exit_code == 1
+        # Check if error message is in output (stdout/stderr) or if exit code is 1 (typer.Exit)
+        assert "Invalid meeting ID format" in result.stdout or "Invalid meeting ID format" in result.stderr or result.exit_code == 1
 

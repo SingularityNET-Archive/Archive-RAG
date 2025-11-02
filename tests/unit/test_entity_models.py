@@ -10,6 +10,7 @@ from src.models.meeting import Meeting, MeetingType
 from src.models.person import Person
 from src.models.agenda_item import AgendaItem, AgendaItemStatus
 from src.models.action_item import ActionItem, ActionItemStatus
+from src.models.document import Document
 
 
 class TestWorkgroupModel:
@@ -321,4 +322,102 @@ class TestActionItemModel:
         assert action_item.assignee_id is None
         assert action_item.due_date is None
         assert action_item.status is None
+
+
+class TestDocumentModel:
+    """Unit tests for Document model validation."""
+    
+    @pytest.fixture
+    def meeting_id(self):
+        """Fixture for meeting UUID."""
+        return uuid4()
+    
+    def test_document_creation_valid(self, meeting_id):
+        """Test creating a valid document."""
+        document = Document(
+            meeting_id=meeting_id,
+            title="Budget Report",
+            link="https://example.com/budget.pdf"
+        )
+        assert document.meeting_id == meeting_id
+        assert document.title == "Budget Report"
+        assert document.link == "https://example.com/budget.pdf"
+        assert isinstance(document.id, UUID)
+        assert document.created_at is not None
+    
+    def test_document_meeting_id_required(self):
+        """Test meeting_id is required."""
+        with pytest.raises(ValidationError) as exc_info:
+            Document(title="Test Document", link="https://example.com/doc.pdf")
+        assert "meeting_id" in str(exc_info.value)
+    
+    def test_document_title_required(self, meeting_id):
+        """Test title is required."""
+        with pytest.raises(ValidationError) as exc_info:
+            Document(meeting_id=meeting_id, link="https://example.com/doc.pdf")
+        assert "title" in str(exc_info.value)
+    
+    def test_document_link_required(self, meeting_id):
+        """Test link is required."""
+        with pytest.raises(ValidationError) as exc_info:
+            Document(meeting_id=meeting_id, title="Test Document")
+        assert "link" in str(exc_info.value)
+    
+    def test_document_title_not_empty(self, meeting_id):
+        """Test title cannot be empty."""
+        with pytest.raises(ValidationError):
+            Document(
+                meeting_id=meeting_id,
+                title="",
+                link="https://example.com/doc.pdf"
+            )
+        
+        with pytest.raises(ValidationError):
+            Document(
+                meeting_id=meeting_id,
+                title="   ",
+                link="https://example.com/doc.pdf"
+            )
+    
+    def test_document_link_url_format(self, meeting_id):
+        """Test link must be valid URL format."""
+        # Valid URL
+        document = Document(
+            meeting_id=meeting_id,
+            title="Valid Document",
+            link="https://example.com/document.pdf"
+        )
+        assert str(document.link) == "https://example.com/document.pdf"
+        
+        # HTTP URL also valid
+        document2 = Document(
+            meeting_id=meeting_id,
+            title="HTTP Document",
+            link="http://example.com/doc.pdf"
+        )
+        assert str(document2.link) == "http://example.com/doc.pdf"
+    
+    def test_document_link_validates_on_access(self, meeting_id):
+        """Test that invalid links are stored but validation happens on access (FR-004)."""
+        # Pydantic will validate URL format at creation time
+        # But broken/inaccessible links are detected on access, not during ingestion
+        # This test verifies valid URL format is accepted
+        document = Document(
+            meeting_id=meeting_id,
+            title="Document with Link",
+            link="https://example.com/potentially-broken-link.pdf"
+        )
+        assert document.link is not None
+        # Actual link accessibility check happens in query service (T052)
+    
+    def test_document_with_custom_id(self, meeting_id):
+        """Test creating document with custom UUID."""
+        custom_id = uuid4()
+        document = Document(
+            id=custom_id,
+            meeting_id=meeting_id,
+            title="Custom Document",
+            link="https://example.com/custom.pdf"
+        )
+        assert document.id == custom_id
 

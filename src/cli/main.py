@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from .index import index_command
-from .query import query_command, query_workgroup_command, query_person_command
+from .query import query_command, query_workgroup_command, query_person_command, query_meeting_command
 from .audit_view import audit_view_command
 from .topic_model import topic_model_command
 from .extract_entities import extract_entities_command
@@ -140,6 +140,16 @@ def query_workgroup(
 ):
     """Query all meetings for a specific workgroup using entity-based data model."""
     query_workgroup_command(workgroup_id=workgroup_id, output_format=output_format)
+
+
+@app.command()
+def query_meeting(
+    meeting_id: str = typer.Argument(..., help="Meeting ID (UUID)"),
+    documents: bool = typer.Option(False, "--documents", help="Query documents linked to this meeting"),
+    output_format: str = typer.Option("text", "--output-format", help="Output format: text or json")
+):
+    """Query information for a specific meeting, optionally including linked documents."""
+    query_meeting_command(meeting_id=meeting_id, documents=documents, output_format=output_format)
 
 
 @app.command()

@@ -120,19 +120,19 @@
 
 ### Tests for User Story 3
 
-- [ ] T044 [P] [US3] Unit test for Document model validation in `tests/unit/test_entity_models.py`
-- [ ] T045 [P] [US3] Integration test for query documents for meeting in `tests/integration/test_entity_relationships.py`
-- [ ] T046 [P] [US3] Contract test for `archive-rag query-meeting --documents` command in `tests/contract/test_query_command.py`
+- [X] T044 [P] [US3] Unit test for Document model validation in `tests/unit/test_entity_models.py`
+- [X] T045 [P] [US3] Integration test for query documents for meeting in `tests/integration/test_entity_relationships.py`
+- [X] T046 [P] [US3] Contract test for `archive-rag query-meeting --documents` command in `tests/contract/test_query_command.py`
 
 ### Implementation for User Story 3
 
-- [ ] T047 [P] [US3] Create Document model in `src/models/document.py` with id (UUID), meeting_id (UUID, FK), title (String, required), link (URL, required), created_at fields
-- [ ] T048 [US3] Implement `save_document()` in `src/services/entity_storage.py` to save document JSON file to `entities/documents/{id}.json`
-- [ ] T049 [US3] Implement `get_documents_by_meeting()` in `src/services/entity_query.py` to query documents by meeting_id (scan `entities/documents/` directory with filtering)
-- [ ] T050 [US3] Implement `archive-rag query-meeting --documents` CLI command in `src/cli/query.py` (extend `query_meeting_command` function)
-- [ ] T051 [US3] Add validation for meeting_id foreign key in `src/lib/validation.py` (validate meeting exists before saving document)
-- [ ] T052 [US3] Implement document link validation on access (not during ingestion) in `src/services/entity_query.py` (detect broken links but don't block retrieval)
-- [ ] T053 [US3] Add logging for query-meeting documents operations in `src/services/entity_query.py`
+- [X] T047 [P] [US3] Create Document model in `src/models/document.py` with id (UUID), meeting_id (UUID, FK), title (String, required), link (URL, required), created_at fields
+- [X] T048 [US3] Implement `save_document()` in `src/services/entity_storage.py` to save document JSON file to `entities/documents/{id}.json`
+- [X] T049 [US3] Implement `get_documents_by_meeting()` in `src/services/entity_query.py` to query documents by meeting_id (scan `entities/documents/` directory with filtering)
+- [X] T050 [US3] Implement `archive-rag query-meeting --documents` CLI command in `src/cli/query.py` (extend `query_meeting_command` function)
+- [X] T051 [US3] Add validation for meeting_id foreign key in `src/lib/validation.py` (validate meeting exists before saving document)
+- [X] T052 [US3] Implement document link validation on access (not during ingestion) in `src/services/entity_query.py` (detect broken links but don't block retrieval)
+- [X] T053 [US3] Add logging for query-meeting documents operations in `src/services/entity_query.py`
 
 **Checkpoint**: At this point, User Stories 1, 2, AND 3 should all work independently. Users can query meetings by workgroup, action items by person, and documents for meetings.
 

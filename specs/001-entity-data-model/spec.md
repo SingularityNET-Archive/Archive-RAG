@@ -14,6 +14,9 @@
 - Q: Should meetings be required to have at least one participant? → A: Require at least one participant - Meeting validation fails if participant list is empty
 - Q: Should agenda items be required to have at least one action item or decision item? → A: Allow empty agenda items - Agenda items can exist without action items or decision items (placeholder topics)
 - Q: How should the system handle invalid or inaccessible document links? → A: Store as-is, validate on access - Accept links during ingestion, detect broken links when documents are accessed
+- Q: What does "95% accuracy" mean for SC-005 (query meetings by topic tags)? → A: Both Precision and Recall: 95% precision (95% of returned meetings contain the queried topic) AND 95% recall (95% of meetings with the topic are returned)
+- Q: What does "100% data preservation" include for SC-010 (migration)? → A: All meeting content (transcript text), entity relationships (foreign keys), metadata (dates, types, flags), and external references (document links)
+- Q: How should the system handle meetings with canceled summaries or no summaries given (FR-018)? → A: Store flags and allow queries - meetings with `canceled_summary=true` or `no_summary_given=true` are returned in queries but marked appropriately in results
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -102,7 +105,7 @@ A user needs to find meetings by topics covered or emotional tone to discover re
 - When a person is deleted, all associated action items are cascade deleted (person-action item relationship)
 - When a workgroup is deleted, all associated meetings (and their related entities: documents, agenda items, action items, decision items, tags) are cascade deleted
 - System requires at least one participant per meeting - meetings with empty participant lists are invalid and rejected during validation
-- How are meetings handled that have canceled summaries or no summaries given?
+- Meetings with canceled summaries or no summaries given are stored with `canceled_summary=true` or `no_summary_given=true` flags, returned in queries, and marked appropriately in query results
 - Agenda items without action items or decision items are valid - system allows empty agenda items as placeholder topics
 - Document links are stored as-is during ingestion - validation occurs on access when documents are retrieved, broken links are detected but do not block ingestion
 
@@ -131,7 +134,7 @@ A user needs to find meetings by topics covered or emotional tone to discover re
 - **FR-017**: System MUST maintain referential integrity between related entities (workgroups-meetings, meetings-people, etc.)
 - **FR-021**: System MUST implement cascade delete: deleting a person deletes all associated action items
 - **FR-022**: System MUST implement cascade delete: deleting a workgroup deletes all associated meetings and their related entities (documents, agenda items, action items, decision items, tags)
-- **FR-018**: System MUST handle meetings with canceled summaries or no summaries given
+- **FR-018**: System MUST handle meetings with canceled summaries or no summaries given - meetings with `canceled_summary=true` or `no_summary_given=true` are stored with these flags set, returned in queries, and marked appropriately in query results
 - **FR-019**: System MUST support storing meeting metadata including type, date, purpose, and video links
 - **FR-020**: System MUST extract transcript content from decision items for RAG embedding purposes
 
@@ -161,12 +164,12 @@ A user needs to find meetings by topics covered or emotional tone to discover re
 - **SC-002**: Users can retrieve all action items assigned to a person across all meetings in under 3 seconds
 - **SC-003**: Users can access all documents linked to a meeting in under 1 second
 - **SC-004**: System maintains referential integrity for 100% of entity relationships
-- **SC-005**: Users can query meetings by topic tags with 95% accuracy in matching relevant content
+- **SC-005**: Users can query meetings by topic tags with 95% precision (95% of returned meetings contain the queried topic) AND 95% recall (95% of meetings with the topic are returned)
 - **SC-006**: System supports storing and retrieving meetings with full entity relationships without data loss
 - **SC-007**: Users can navigate from a meeting to all related entities (people, documents, agenda items) in under 2 seconds per relationship type
 - **SC-008**: RAG system can extract and embed transcript content from decision items with 100% coverage of decision text
 - **SC-009**: System handles meetings with no participants or empty transcripts without errors
-- **SC-010**: Migration from existing flat data structure to relational model preserves 100% of meeting content and associations
+- **SC-010**: Migration from existing flat data structure to relational model preserves 100% of meeting content (transcript text), entity relationships (foreign keys), metadata (dates, types, flags), and external references (document links)
 
 ## Assumptions
 
