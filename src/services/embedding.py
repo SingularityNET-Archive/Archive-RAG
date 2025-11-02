@@ -33,9 +33,12 @@ class EmbeddingService:
         self._remote_service = None
         
         # Check if remote processing is enabled
-        remote_enabled, api_url, api_key = get_embedding_remote_config()
+        remote_enabled, api_url, api_key, remote_model = get_embedding_remote_config()
         if use_remote is None:
             use_remote = remote_enabled
+        
+        # Use remote model name if remote is enabled, otherwise use provided model_name
+        effective_model_name = remote_model if use_remote and remote_model else model_name
         
         if use_remote and api_url:
             # Use remote embedding service (no fallback)
@@ -44,7 +47,7 @@ class EmbeddingService:
                 self._remote_service = RemoteEmbeddingService(
                     api_url=api_url,
                     api_key=api_key,
-                    model_name=model_name
+                    model_name=effective_model_name
                 )
                 logger.info("embedding_service_remote_initialized", model_name=model_name, api_url=api_url)
                 self.model = None  # No local model when using remote

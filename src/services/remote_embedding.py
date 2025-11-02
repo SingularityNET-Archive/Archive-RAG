@@ -110,7 +110,10 @@ class RemoteEmbeddingService:
         if all_embeddings:
             self.embedding_dimension = len(all_embeddings[0])
         
-        return np.array(all_embeddings)
+        # Convert to numpy array and ensure float32 (required by FAISS)
+        embeddings_array = np.array(all_embeddings, dtype=np.float32)
+        
+        return embeddings_array
     
     def _embed_huggingface(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
         """Generate embeddings using HuggingFace Inference API."""
@@ -210,7 +213,10 @@ class RemoteEmbeddingService:
         if all_embeddings:
             self.embedding_dimension = len(all_embeddings[0])
         
-        return np.array(all_embeddings)
+        # Convert to numpy array and ensure float32 (required by FAISS)
+        embeddings_array = np.array(all_embeddings, dtype=np.float32)
+        
+        return embeddings_array
     
     def _embed_custom(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
         """Generate embeddings using custom API endpoint."""
@@ -245,7 +251,10 @@ class RemoteEmbeddingService:
         if all_embeddings:
             self.embedding_dimension = len(all_embeddings[0])
         
-        return np.array(all_embeddings)
+        # Convert to numpy array and ensure float32 (required by FAISS)
+        embeddings_array = np.array(all_embeddings, dtype=np.float32)
+        
+        return embeddings_array
     
     def get_embedding_dimension(self) -> int:
         """
