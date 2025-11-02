@@ -88,11 +88,17 @@ def chunk_transcript(
         chunks.append(chunk)
         
         # Move start position with overlap
-        start_idx = end_idx - chunk_overlap
+        new_start_idx = end_idx - chunk_overlap
+        
+        # Prevent infinite loop - check if we'd get stuck or go backwards
+        if new_start_idx <= start_idx or new_start_idx >= end_idx:
+            break
+        
+        start_idx = new_start_idx
         chunk_index += 1
         
-        # Prevent infinite loop
-        if start_idx <= 0:
+        # Safety check for very small texts
+        if chunk_index > 10000:  # Sanity check
             break
     
     # Log chunking result (non-blocking)
