@@ -1,7 +1,7 @@
 """Index CLI command for ingesting meeting JSON files and creating FAISS index."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 import typer
 
 from ..services.ingestion import ingest_meeting_directory
@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 
 
 def index_command(
-    input_dir: Path = typer.Argument(..., help="Directory containing meeting JSON files"),
+    input_dir: str = typer.Argument(..., help="Directory containing meeting JSON files or URL to JSON data"),
     output_index: str = typer.Argument(..., help="Path to output FAISS index file"),
     embedding_model: str = typer.Option(
         DEFAULT_EMBEDDING_MODEL,
@@ -76,10 +76,20 @@ def index_command(
             pii_detector = create_pii_detector()
             typer.echo("✓ PII detector initialized")
         
-        # Ingest meeting files
-        typer.echo(f"Ingesting meeting files from {input_dir}...")
-        meeting_records = ingest_meeting_directory(input_dir)
-        typer.echo(f"✓ Ingested {len(meeting_records)} meeting files")
+        # Ingest meeting files (from directory or URL)
+        # Convert Path to str if needed, and check if it's a URL
+        input_path_str = str(input_dir) if isinstance(input_dir, Path) else input_dir
+        is_url = input_path_str.startswith("http://") or input_path_str.startswith("https://")
+        
+        if is_url:
+            typer.echo(f"Fetching and ingesting meetings from URL...")
+            typer.echo(f"  URL: {input_path_str}")
+        else:
+            typer.echo(f"Ingesting meeting files from {input_dir}...")
+        
+        # ingest_meeting_directory handles both URLs and directory paths
+        meeting_records = ingest_meeting_directory(input_path_str)
+        typer.echo(f"✓ Ingested {len(meeting_records)} meeting records")
         
         if hash_only:
             # Only compute hashes

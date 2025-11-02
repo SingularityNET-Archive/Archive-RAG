@@ -56,6 +56,16 @@ def chunk_transcript(
         List of DocumentChunk objects
     """
     transcript = meeting_record.transcript
+    
+    # Handle meetings with no transcript
+    if not transcript or not transcript.strip():
+        logger.warning(
+            "no_transcript_skipping",
+            meeting_id=meeting_record.id,
+            reason="Empty or missing transcript"
+        )
+        return []
+    
     chunks = []
     
     # Metadata to preserve in each chunk
