@@ -142,64 +142,92 @@ def query_workgroup_command(
 
 
 def query_meeting_command(
-    meeting_id: str = typer.Argument(..., help="Meeting ID (UUID)"),
-    documents: bool = typer.Option(
-        False,
-        "--documents",
-        help="Query documents linked to this meeting"
-    ),
-    output_format: str = typer.Option(
-        "text",
-        "--output-format",
-        help="Output format: text or json"
-    )
-):
-    """
-    Query information for a specific meeting.
-    
-    Uses the entity-based data model to retrieve meeting information and
-    optionally linked documents.
-    """
-    try:
-        # Parse meeting_id as UUID
+        meeting_id: str = typer.Argument(..., help="Meeting ID (UUID)"),
+        documents: bool = typer.Option(
+            False,
+            "--documents",
+            help="Query documents linked to this meeting"
+        ),
+        decisions: bool = typer.Option(
+            False,
+            "--decisions",
+            help="Query decisions made in this meeting"
+        ),
+        output_format: str = typer.Option(
+            "text",
+            "--output-format",
+            help="Output format: text or json"
+        )
+    ):
+        """
+        Query information for a specific meeting.
+        
+        Uses the entity-based data model to retrieve meeting information,
+        optionally linked documents, and decisions made in the meeting.
+        """
         try:
-            meeting_uuid = UUID(meeting_id)
-        except ValueError:
-            typer.echo(f"Invalid meeting ID format: {meeting_id}. Expected UUID.", err=True)
-            raise typer.Exit(code=1)
-        
-        # Create query service
-        query_service = EntityQueryService()
-        
-        if documents:
-            # Query documents for meeting (with link validation on access)
-            documents_list = query_service.get_documents_by_meeting_with_validation(meeting_uuid)
+            # Parse meeting_id as UUID
+            try:
+                meeting_uuid = UUID(meeting_id)
+            except ValueError:
+                typer.echo(f"Invalid meeting ID format: {meeting_id}. Expected UUID.", err=True)
+                raise typer.Exit(code=1)
             
-            if output_format == "json":
-                import json
-                documents_data = [doc.model_dump(mode="json") for doc in documents_list]
-                typer.echo(json.dumps({"meeting_id": str(meeting_uuid), "documents": documents_data, "count": len(documents_list)}, indent=2))
+            # Create query service
+            query_service = EntityQueryService()
+            
+            if documents:
+                # Query documents for meeting (with link validation on access)
+                documents_list = query_service.get_documents_by_meeting_with_validation(meeting_uuid)
+                
+                if output_format == "json":
+                    import json
+                    documents_data = [doc.model_dump(mode="json") for doc in documents_list]
+                    typer.echo(json.dumps({"meeting_id": str(meeting_uuid), "documents": documents_data, "count": len(documents_list)}, indent=2))
+                else:
+                    # Text format
+                    typer.echo(f"Meeting ID: {meeting_id}")
+                    typer.echo(f"Found {len(documents_list)} document(s)")
+                    typer.echo("\nDocuments:")
+                    for document in documents_list:
+                        typer.echo(f"  - {document.title}")
+                        typer.echo(f"    Link: {document.link}")
+                        typer.echo(f"    ID: {document.id}")
+                        typer.echo(f"    Created: {document.created_at}")
+                
+                logger.info("query_meeting_documents_success", meeting_id=str(meeting_uuid), document_count=len(documents_list))
+            elif decisions:
+                # Query decisions for meeting
+                decisions_list = query_service.get_decision_items_by_meeting(meeting_uuid)
+                
+                if output_format == "json":
+                    import json
+                    decisions_data = [decision.model_dump(mode="json") for decision in decisions_list]
+                    typer.echo(json.dumps({"meeting_id": str(meeting_uuid), "decisions": decisions_data, "count": len(decisions_list)}, indent=2))
+                else:
+                    # Text format
+                    typer.echo(f"Meeting ID: {meeting_id}")
+                    typer.echo(f"Found {len(decisions_list)} decision(s)")
+                    typer.echo("\nDecisions:")
+                    for decision in decisions_list:
+                        typer.echo(f"  - {decision.decision}")
+                        if decision.rationale:
+                            typer.echo(f"    Rationale: {decision.rationale}")
+                        if decision.effect:
+                            typer.echo(f"    Effect: {decision.effect.value}")
+                        typer.echo(f"    Created: {decision.created_at}")
+                
+                logger.info("query_meeting_decisions_success", meeting_id=str(meeting_uuid), decision_count=len(decisions_list))
             else:
-                # Text format
+                # Just display meeting info (no options requested)
                 typer.echo(f"Meeting ID: {meeting_id}")
-                typer.echo(f"Found {len(documents_list)} document(s)")
-                typer.echo("\nDocuments:")
-                for document in documents_list:
-                    typer.echo(f"  - {document.title}")
-                    typer.echo(f"    Link: {document.link}")
-                    typer.echo(f"    ID: {document.id}")
-                    typer.echo(f"    Created: {document.created_at}")
+                typer.echo("Use --documents to query documents for this meeting.")
+                typer.echo("Use --decisions to query decisions made in this meeting.")
             
-            logger.info("query_meeting_documents_success", meeting_id=str(meeting_uuid), document_count=len(documents_list))
-        else:
-            # Just display meeting info (no documents requested)
-            typer.echo(f"Meeting ID: {meeting_id}")
-            typer.echo("Use --documents to query documents for this meeting.")
-        
-    except Exception as e:
-        logger.error("query_meeting_failed", error=str(e), meeting_id=meeting_id)
-        typer.echo(f"Query meeting failed: {e}", err=True)
-        raise typer.Exit(code=1)
+        except Exception as e:
+            logger.error("query_meeting_failed", error=str(e), meeting_id=meeting_id)
+            typer.echo(f"Query meeting failed: {e}", err=True)
+            raise typer.Exit(code=1)
 
 
 def query_person_command(

@@ -27,6 +27,7 @@ from src.models.person import Person
 from src.models.agenda_item import AgendaItem
 from src.models.action_item import ActionItem
 from src.models.document import Document
+from src.models.decision_item import DecisionItem
 
 T = TypeVar("T", bound=BaseEntity)
 
@@ -336,6 +337,29 @@ def save_action_item(action_item: ActionItem) -> None:
     
     # Save action item entity
     save_entity(action_item, ENTITIES_ACTION_ITEMS_DIR)
+
+
+def save_decision_item(decision_item: DecisionItem) -> None:
+    """
+    Save decision item entity to JSON file.
+    
+    Args:
+        decision_item: DecisionItem entity instance
+    
+    Raises:
+        ValueError: If decision item validation fails or agenda item doesn't exist
+        IOError: If file write fails
+    """
+    # Validate agenda_item_id foreign key exists
+    validate_foreign_key(
+        decision_item.agenda_item_id,
+        ENTITIES_AGENDA_ITEMS_DIR,
+        AgendaItem,
+        foreign_key_name="agenda_item_id"
+    )
+    
+    # Save decision item entity
+    save_entity(decision_item, ENTITIES_DECISION_ITEMS_DIR)
 
 
 def save_document(document: Document) -> None:

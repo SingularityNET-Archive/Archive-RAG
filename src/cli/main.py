@@ -146,10 +146,11 @@ def query_workgroup(
 def query_meeting(
     meeting_id: str = typer.Argument(..., help="Meeting ID (UUID)"),
     documents: bool = typer.Option(False, "--documents", help="Query documents linked to this meeting"),
+    decisions: bool = typer.Option(False, "--decisions", help="Query decisions made in this meeting"),
     output_format: str = typer.Option("text", "--output-format", help="Output format: text or json")
 ):
-    """Query information for a specific meeting, optionally including linked documents."""
-    query_meeting_command(meeting_id=meeting_id, documents=documents, output_format=output_format)
+    """Query information for a specific meeting, optionally including linked documents and decisions."""
+    query_meeting_command(meeting_id=meeting_id, documents=documents, decisions=decisions, output_format=output_format)
 
 
 @app.command()

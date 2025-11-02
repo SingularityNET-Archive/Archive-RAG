@@ -21,6 +21,8 @@ from src.models.workgroup import Workgroup
 from src.models.person import Person
 from src.models.action_item import ActionItem
 from src.models.document import Document
+from src.models.agenda_item import AgendaItem
+from src.models.decision_item import DecisionItem, DecisionEffect
 
 logger = get_logger(__name__)
 
@@ -289,5 +291,122 @@ class EntityQueryService:
             
         except Exception as e:
             logger.error("query_documents_by_meeting_with_validation_failed", meeting_id=str(meeting_id), error=str(e))
+            raise
+    
+    def get_decision_items_by_agenda_item(self, agenda_item_id: UUID) -> List[DecisionItem]:
+        """
+        Get all decision items for a specific agenda item.
+        
+        Args:
+            agenda_item_id: UUID of agenda item
+        
+        Returns:
+            List of DecisionItem entities for the agenda item
+        
+        Raises:
+            ValueError: If entity loading fails
+        """
+        logger.info("query_decision_items_by_agenda_item_start", agenda_item_id=str(agenda_item_id))
+        
+        try:
+            # Scan decision_items directory for items with matching agenda_item_id
+            decision_items = []
+            
+            for decision_item_file in ENTITIES_DECISION_ITEMS_DIR.glob("*.json"):
+                try:
+                    decision_item_id = UUID(decision_item_file.stem)
+                    decision_item = load_entity(decision_item_id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem)
+                    if decision_item and decision_item.agenda_item_id == agenda_item_id:
+                        decision_items.append(decision_item)
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_decision_items_loading_failed", decision_item_id=decision_item_file.stem, error=str(e))
+                    continue
+            
+            logger.info("query_decision_items_by_agenda_item_success", agenda_item_id=str(agenda_item_id), decision_count=len(decision_items))
+            return decision_items
+            
+        except Exception as e:
+            logger.error("query_decision_items_by_agenda_item_failed", agenda_item_id=str(agenda_item_id), error=str(e))
+            raise
+    
+    def get_decision_items_by_meeting(self, meeting_id: UUID) -> List[DecisionItem]:
+        """
+        Get all decision items for a specific meeting.
+        
+        This method retrieves decisions by:
+        1. Finding all agenda items for the meeting
+        2. Finding all decision items for each agenda item
+        
+        Args:
+            meeting_id: UUID of meeting
+        
+        Returns:
+            List of DecisionItem entities for the meeting
+        
+        Raises:
+            ValueError: If entity loading fails
+        """
+        logger.info("query_decision_items_by_meeting_start", meeting_id=str(meeting_id))
+        
+        try:
+            # First, get all agenda items for this meeting
+            agenda_items = []
+            for agenda_item_file in ENTITIES_AGENDA_ITEMS_DIR.glob("*.json"):
+                try:
+                    agenda_item_id = UUID(agenda_item_file.stem)
+                    agenda_item = load_entity(agenda_item_id, ENTITIES_AGENDA_ITEMS_DIR, AgendaItem)
+                    if agenda_item and agenda_item.meeting_id == meeting_id:
+                        agenda_items.append(agenda_item)
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_decision_items_agenda_item_load_failed", agenda_item_id=agenda_item_file.stem, error=str(e))
+                    continue
+            
+            # Then, get all decision items for each agenda item
+            decision_items = []
+            for agenda_item in agenda_items:
+                agenda_decisions = self.get_decision_items_by_agenda_item(agenda_item.id)
+                decision_items.extend(agenda_decisions)
+            
+            logger.info("query_decision_items_by_meeting_success", meeting_id=str(meeting_id), decision_count=len(decision_items))
+            return decision_items
+            
+        except Exception as e:
+            logger.error("query_decision_items_by_meeting_failed", meeting_id=str(meeting_id), error=str(e))
+            raise
+    
+    def get_decision_items_by_effect(self, effect: DecisionEffect) -> List[DecisionItem]:
+        """
+        Get all decision items with a specific effect scope.
+        
+        Args:
+            effect: DecisionEffect enum value
+        
+        Returns:
+            List of DecisionItem entities with matching effect
+        
+        Raises:
+            ValueError: If entity loading fails
+        """
+        logger.info("query_decision_items_by_effect_start", effect=effect.value)
+        
+        try:
+            # Scan decision_items directory for items with matching effect
+            decision_items = []
+            
+            for decision_item_file in ENTITIES_DECISION_ITEMS_DIR.glob("*.json"):
+                try:
+                    decision_item_id = UUID(decision_item_file.stem)
+                    decision_item = load_entity(decision_item_id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem)
+                    if decision_item and decision_item.effect == effect:
+                        decision_items.append(decision_item)
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_decision_items_by_effect_loading_failed", decision_item_id=decision_item_file.stem, error=str(e))
+                    continue
+            
+            logger.info("query_decision_items_by_effect_success", effect=effect.value, decision_count=len(decision_items))
+            return decision_items
+            
+        except Exception as e:
+            logger.error("query_decision_items_by_effect_failed", effect=effect.value, error=str(e))
             raise
 
