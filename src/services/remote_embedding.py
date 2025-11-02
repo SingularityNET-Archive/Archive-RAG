@@ -78,13 +78,13 @@ class RemoteEmbeddingService:
             Numpy array of embedding vectors
         """
         if self.api_type == "openai":
-            return self._embed_openai(texts)
+            return self._embed_openai(texts, batch_size=batch_size)
         elif self.api_type == "huggingface":
-            return self._embed_huggingface(texts)
+            return self._embed_huggingface(texts, batch_size=batch_size)
         else:
-            return self._embed_custom(texts)
+            return self._embed_custom(texts, batch_size=batch_size)
     
-    def _embed_openai(self, texts: List[str]) -> np.ndarray:
+    def _embed_openai(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
         """Generate embeddings using OpenAI API."""
         import openai
         
@@ -112,7 +112,7 @@ class RemoteEmbeddingService:
         
         return np.array(all_embeddings)
     
-    def _embed_huggingface(self, texts: List[str]) -> np.ndarray:
+    def _embed_huggingface(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
         """Generate embeddings using HuggingFace Inference API."""
         headers = {}
         if self.api_key:
@@ -125,20 +125,83 @@ class RemoteEmbeddingService:
             
             try:
                 # HuggingFace inference API format
+                # URL format: https://api-inference.huggingface.co/models/{model_name}
+                # Remove any existing /models or /pipeline path from api_url
+                base_url = self.api_url.rstrip('/')
+                if '/models' in base_url:
+                    # If api_url already contains /models, use as-is
+                    model_url = f"{base_url}"
+                elif '/pipeline' in base_url:
+                    # Replace /pipeline/feature-extraction with /models
+                    model_url = base_url.replace('/pipeline/feature-extraction', '/models')
+                    model_url = model_url.rstrip('/') + f"/{self.model_name}"
+                else:
+                    # Standard format: append /models/{model_name}
+                    model_url = f"{base_url}/models/{self.model_name}"
+                
+                # For sentence-transformers models on HuggingFace Inference API:
+                # - Many are configured as SentenceSimilarityPipeline (need source_sentence + sentences)
+                # - For embeddings, we need to use the underlying transformer model
+                # - Try using feature-extraction task or underlying model
+                
+                # Use "inputs" parameter (required by HuggingFace Inference API)
+                # The model should support feature-extraction task
+                payload = {"inputs": batch}
+                
                 response = requests.post(
-                    f"{self.api_url}/pipeline/feature-extraction/{self.model_name}",
+                    model_url,
                     headers=headers,
-                    json={"inputs": batch},
+                    json=payload,
                     timeout=60
                 )
-                response.raise_for_status()
-                batch_embeddings = response.json()
                 
-                # Handle single vs batch response
-                if isinstance(batch_embeddings[0], list):
-                    all_embeddings.extend(batch_embeddings)
+                # Handle 503 (model loading) - wait and retry once
+                if response.status_code == 503:
+                    import time
+                    logger.warning("huggingface_model_loading", model=self.model_name, wait_seconds=10)
+                    time.sleep(10)  # Wait for model to load
+                    response = requests.post(
+                        model_url,
+                        headers=headers,
+                        json=payload,
+                        timeout=60
+                    )
+                
+                # Log error details before raising
+                if response.status_code >= 400:
+                    error_text = response.text[:500] if response.text else "No error message"
+                    logger.error(
+                        "huggingface_api_error",
+                        status_code=response.status_code,
+                        error=error_text,
+                        url=model_url,
+                        batch_size=len(batch)
+                    )
+                    
+                    # If 400 error suggests model doesn't support feature extraction,
+                    # suggest using local processing instead
+                    if response.status_code == 400 and "SentenceSimilarityPipeline" in error_text:
+                        logger.warning(
+                            "huggingface_model_not_supporting_feature_extraction",
+                            model=self.model_name,
+                            suggestion="Model is configured for similarity, not feature extraction. Consider using local sentence-transformers instead."
+                        )
+                
+                response.raise_for_status()
+                result = response.json()
+                
+                # HuggingFace Inference API returns embeddings as a list of lists
+                # Each input text becomes a list of floats (embedding vector)
+                if isinstance(result, list):
+                    # Batch response: list of embeddings
+                    # Each element is a list of floats representing one embedding
+                    all_embeddings.extend(result)
+                elif isinstance(result, dict) and "embeddings" in result:
+                    # Some APIs wrap in {"embeddings": [...]}
+                    all_embeddings.extend(result["embeddings"])
                 else:
-                    all_embeddings.append(batch_embeddings)
+                    # Single embedding (shouldn't happen, but handle it)
+                    all_embeddings.append(result if isinstance(result, list) else [result])
             except Exception as e:
                 logger.error("huggingface_embedding_failed", error=str(e), batch_size=len(batch))
                 raise
@@ -149,7 +212,7 @@ class RemoteEmbeddingService:
         
         return np.array(all_embeddings)
     
-    def _embed_custom(self, texts: List[str]) -> np.ndarray:
+    def _embed_custom(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
         """Generate embeddings using custom API endpoint."""
         headers = {"Content-Type": "application/json"}
         if self.api_key:

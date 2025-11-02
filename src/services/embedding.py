@@ -38,7 +38,7 @@ class EmbeddingService:
             use_remote = remote_enabled
         
         if use_remote and api_url:
-            # Use remote embedding service
+            # Use remote embedding service (no fallback)
             try:
                 from ..services.remote_embedding import RemoteEmbeddingService
                 self._remote_service = RemoteEmbeddingService(
@@ -47,13 +47,17 @@ class EmbeddingService:
                     model_name=model_name
                 )
                 logger.info("embedding_service_remote_initialized", model_name=model_name, api_url=api_url)
+                self.model = None  # No local model when using remote
             except ImportError:
-                logger.warning("remote_embedding_service_unavailable", fallback="local")
-                use_remote = False
-        
-        if not use_remote:
+                logger.error("remote_embedding_service_unavailable", api_url=api_url)
+                raise RuntimeError(
+                    f"Remote embedding service unavailable. "
+                    f"Required dependencies not installed or API URL invalid: {api_url}"
+                )
+        else:
             # Use local embedding service (default, constitution-compliant)
             self.model = SentenceTransformer(model_name, device=device)
+            self._remote_service = None  # No remote service when using local
             logger.debug("embedding_service_local_initialized", model_name=model_name, device=device)
     
     def embed_text(self, text: str) -> np.ndarray:
@@ -65,12 +69,33 @@ class EmbeddingService:
             
         Returns:
             Embedding vector as numpy array
+        
+        Raises:
+            RuntimeError: If remote embedding fails (no fallback to local)
         """
         if self._remote_service:
-            return self._remote_service.embed_text(text)
-        else:
-            embedding = self.model.encode(text, convert_to_numpy=True)
-            return embedding
+            try:
+                return self._remote_service.embed_text(text)
+            except Exception as e:
+                logger.error(
+                    "remote_embedding_failed",
+                    error=str(e),
+                    model=self.model_name,
+                    api_url=getattr(self._remote_service, 'api_url', 'unknown')
+                )
+                raise RuntimeError(
+                    f"Remote embedding failed: {e}\n"
+                    f"Model: {self.model_name}\n"
+                    f"Check your API configuration and ensure the model supports feature extraction. "
+                    f"To use local embeddings instead, disable remote processing in your .env file."
+                ) from e
+        
+        # Use local embedding service
+        if self.model is None:
+            raise RuntimeError("Local embedding model not initialized")
+        
+        embedding = self.model.encode(text, convert_to_numpy=True)
+        return embedding
     
     def embed_texts(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
         """
@@ -82,17 +107,39 @@ class EmbeddingService:
         
         Returns:
             Numpy array of embedding vectors
+        
+        Raises:
+            RuntimeError: If remote embedding fails (no fallback to local)
         """
         if self._remote_service:
-            return self._remote_service.embed_texts(texts, batch_size=batch_size)
-        else:
-            embeddings = self.model.encode(
-                texts,
-                batch_size=batch_size,
-                convert_to_numpy=True,
-                show_progress_bar=False
-            )
-            return embeddings
+            try:
+                return self._remote_service.embed_texts(texts, batch_size=batch_size)
+            except Exception as e:
+                logger.error(
+                    "remote_embedding_failed",
+                    error=str(e),
+                    model=self.model_name,
+                    batch_size=len(texts),
+                    api_url=getattr(self._remote_service, 'api_url', 'unknown')
+                )
+                raise RuntimeError(
+                    f"Remote embedding failed: {e}\n"
+                    f"Model: {self.model_name}\n"
+                    f"Check your API configuration and ensure the model supports feature extraction. "
+                    f"To use local embeddings instead, disable remote processing in your .env file."
+                ) from e
+        
+        # Use local embedding service
+        if self.model is None:
+            raise RuntimeError("Local embedding model not initialized")
+        
+        embeddings = self.model.encode(
+            texts,
+            batch_size=batch_size,
+            convert_to_numpy=True,
+            show_progress_bar=False
+        )
+        return embeddings
     
     def get_embedding_dimension(self) -> int:
         """
