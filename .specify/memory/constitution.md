@@ -1,34 +1,30 @@
 <!--
   Sync Impact Report:
   
-  Version change: 1.1.0 → 2.0.0 (MAJOR: Removed local processing, remote-only allowed)
+  Version change: 2.0.0 → 2.1.0 (MINOR: Added mandatory data source requirement)
   
   Modified principles:
-    - Technology Discipline: Changed from local-first with opt-in remote to remote-only requirement
+    - Responsible Data & Privacy Discipline: Added mandatory single data source requirement
   
-  Added sections: None
+  Added sections:
+    - Data Source Discipline: Mandatory single source URL requirement
   
-  Removed sections:
-    - Technology Discipline: Local embeddings + FAISS storage option removed
-    - Technology Discipline: Automatic fallback to local processing requirement removed
-    - Technology Discipline: Local-first principle removed
-    - Technology Discipline: "No external API dependency for core functionality by default" removed
+  Removed sections: None
   
   Templates requiring updates:
-    ⚠️ plan-template.md (constitution check section needs update - local processing references removed)
+    ✅ plan-template.md (constitution check section compatible)
     ✅ spec-template.md (no direct constitution references, compatible)
     ✅ tasks-template.md (no direct constitution references, compatible)
     ✅ checklist-template.md (no direct constitution references, compatible)
   
   Documentation requiring updates:
-    ⚠️ REMOTE_PROCESSING.md (update to reflect remote-only requirement)
-    ⚠️ REMOTE_SETUP_QUICKSTART.md (update to reflect remote-only requirement)
-    ⚠️ Code references: src/services/embedding.py, src/services/rag_generator.py (remove local fallback logic)
+    ⚠️ README.md (update ingestion examples to reflect mandatory source)
+    ⚠️ Data ingestion documentation (update to reflect mandatory source requirement)
   
   Follow-up TODOs:
-    - Update all documentation to reflect remote-only requirement
-    - Remove local processing code paths (fallback logic)
-    - Update migration guide for users currently using local processing
+    - Update code to enforce single data source validation
+    - Update ingestion commands to validate source URL
+    - Document migration path for any existing local data
 -->
 
 # Archive-RAG Constitution
@@ -80,6 +76,7 @@ All actions must be visible and reviewable.
 ### Responsible Data & Privacy Discipline
 
 - Only approved meeting JSON data may be ingested
+- **Single Data Source**: All meeting data MUST be sourced exclusively from: `https://raw.githubusercontent.com/SingularityNET-Archive/SingularityNET-Archive/refs/heads/main/Data/Snet-Ambassador-Program/Meeting-Summaries/2025/meeting-summaries-array.json`
 - SHA-256 hashing for tamper detection
 - Personal private information must be flagged and redacted
 - Topic modeling & entity extraction must not infer missing personal data
@@ -112,4 +109,4 @@ This constitution supersedes all other practices and conventions. Amendments req
 
 All development work must align with these principles. When conflicts arise between practices, the constitution takes precedence.
 
-**Version**: 2.0.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-02
+**Version**: 2.1.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-02
