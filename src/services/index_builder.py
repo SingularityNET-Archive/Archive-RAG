@@ -86,6 +86,15 @@ def build_faiss_index(
     }
     version_hash = compute_string_hash(json.dumps(version_data, sort_keys=True))
     
+    # Determine actual index path (handle full paths vs names)
+    from pathlib import Path
+    if '/' in index_name or '\\' in index_name:
+        actual_index_path = Path(index_name)
+        if not actual_index_path.suffix:
+            actual_index_path = Path(str(actual_index_path) + ".faiss")
+    else:
+        actual_index_path = get_index_path(index_name)
+    
     # Create EmbeddingIndex metadata
     embedding_index = EmbeddingIndex(
         index_id=index_name,
@@ -96,7 +105,7 @@ def build_faiss_index(
         metadata=metadata,
         total_documents=len(chunks),
         created_at=datetime.utcnow().isoformat() + "Z",
-        index_path=str(get_index_path(index_name))
+        index_path=str(actual_index_path)
     )
     
     logger.info(
@@ -121,14 +130,30 @@ def save_index(
     Args:
         index: FAISS index object
         embedding_index: EmbeddingIndex metadata
-        index_name: Name for the index
+        index_name: Name or full path for the index (if contains '/', treated as full path)
     """
+    from pathlib import Path
+    
+    # Handle full paths vs just index names
+    if '/' in index_name or '\\' in index_name:
+        # Full path provided - use as is
+        index_path = Path(index_name)
+        if not index_path.suffix:
+            index_path = Path(str(index_path) + ".faiss")
+        metadata_path = Path(str(index_path) + ".metadata.json")
+    else:
+        # Just index name - use get_index_path helper
+        index_path = get_index_path(index_name)
+        metadata_path = get_index_metadata_path(index_name)
+    
+    # Ensure parent directory exists
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    
     # Save FAISS index
-    index_path = get_index_path(index_name)
     faiss.write_index(index, str(index_path))
     
     # Save metadata
-    metadata_path = get_index_metadata_path(index_name)
     with open(metadata_path, "w", encoding="utf-8") as f:
         json.dump(embedding_index.to_dict(), f, indent=2, ensure_ascii=False)
     

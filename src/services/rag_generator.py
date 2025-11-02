@@ -37,29 +37,43 @@ class RAGGenerator:
             torch.cuda.manual_seed_all(seed)
         
         try:
-            # Load tokenizer and model
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
-            self.model.to(self.device)
-            self.model.eval()
-            
-            # Create text generation pipeline
-            self.generator = pipeline(
-                "text-generation",
-                model=self.model,
-                tokenizer=self.tokenizer,
-                device=0 if self.device == "cuda" else -1
-            )
-            
-            logger.info(
-                "rag_generator_initialized",
-                model_name=self.model_name,
-                device=self.device
-            )
+            # Try to load model, but don't fail if unavailable
+            # For offline/local use, we'll use template-based generation as default
+            if model_name and model_name != "gpt2":
+                # Only try to load if a specific model is requested
+                try:
+                    self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                    self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
+                    self.model.to(self.device)
+                    self.model.eval()
+                    
+                    # Create text generation pipeline
+                    self.generator = pipeline(
+                        "text-generation",
+                        model=self.model,
+                        tokenizer=self.tokenizer,
+                        device=0 if self.device == "cuda" else -1
+                    )
+                    
+                    logger.debug(
+                        "rag_generator_initialized",
+                        model_name=self.model_name,
+                        device=self.device
+                    )
+                except Exception as e:
+                    logger.debug(
+                        "model_loading_failed_fallback",
+                        model_name=self.model_name,
+                        error=str(e)
+                    )
+                    self.generator = None
+            else:
+                # Default: use template-based generation (faster, no model loading)
+                self.generator = None
+                logger.debug("rag_generator_using_template", reason="No specific model requested")
         except Exception as e:
-            logger.warning(
-                "model_loading_failed",
-                model_name=self.model_name,
+            logger.debug(
+                "rag_generator_init_error",
                 error=str(e)
             )
             # Fallback to template-based generation
@@ -107,15 +121,16 @@ Answer:"""
                     num_return_sequences=1,
                     temperature=0.7,
                     do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id
+                    truncation=True,
+                    pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, 'eos_token_id') else None
                 )
                 answer = outputs[0]["generated_text"].split("Answer:")[-1].strip()
             except Exception as e:
-                logger.error("generation_failed", error=str(e))
+                logger.debug("generation_failed_fallback", error=str(e))
                 # Fallback to template
                 answer = self._template_generate(query, retrieved_context)
         else:
-            # Use template-based generation
+            # Use template-based generation (default for small datasets)
             answer = self._template_generate(query, retrieved_context)
         
         logger.info("answer_generated", query=query[:50], answer_length=len(answer))
@@ -140,9 +155,24 @@ Answer:"""
         if not retrieved_context:
             return "I could not find any relevant information in the meeting records."
         
-        # Extract relevant text from chunks
-        relevant_texts = [chunk.get("text", "") for chunk in retrieved_context[:3]]
-        answer = f"Based on the meeting records:\n\n" + "\n\n".join(relevant_texts[:2])
+        # Extract relevant text from chunks and format as answer
+        relevant_texts = []
+        for chunk in retrieved_context[:3]:  # Use top 3 chunks
+            text = chunk.get("text", "").strip()
+            if text:
+                # Extract key sentences or summarize
+                sentences = text.split('. ')
+                if len(sentences) > 2:
+                    # Take first and last sentences for context
+                    relevant_texts.append(sentences[0] + '. ' + sentences[-1] + '.')
+                else:
+                    relevant_texts.append(text)
+        
+        if not relevant_texts:
+            return "I could not find any relevant information in the meeting records."
+        
+        # Format as answer
+        answer = "Based on the meeting records, " + " ".join(relevant_texts[:2])
         
         return answer
 

@@ -19,7 +19,7 @@ def load_index(index_name: str) -> tuple[faiss.Index, EmbeddingIndex]:
     Load FAISS index and metadata from disk.
     
     Args:
-        index_name: Name of the index
+        index_name: Name or full path of the index (if contains '/', treated as full path)
         
     Returns:
         Tuple of (FAISS index, EmbeddingIndex metadata)
@@ -27,8 +27,17 @@ def load_index(index_name: str) -> tuple[faiss.Index, EmbeddingIndex]:
     Raises:
         FileNotFoundError: If index or metadata file not found
     """
-    index_path = get_index_path(index_name)
-    metadata_path = get_index_metadata_path(index_name)
+    # Handle full paths vs just index names
+    if '/' in index_name or '\\' in index_name:
+        # Full path provided - use as is
+        index_path = Path(index_name)
+        if not index_path.suffix:
+            index_path = Path(str(index_path) + ".faiss")
+        metadata_path = Path(str(index_path) + ".metadata.json")
+    else:
+        # Just index name - use get_index_path helper
+        index_path = get_index_path(index_name)
+        metadata_path = get_index_metadata_path(index_name)
     
     if not index_path.exists():
         raise FileNotFoundError(f"Index file not found: {index_path}")

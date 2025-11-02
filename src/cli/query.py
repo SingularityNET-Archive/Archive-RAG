@@ -74,11 +74,11 @@ def query_command(
             typer.echo(json.dumps(rag_query.to_dict(), indent=2))
         else:
             # Text format
-            typer.echo(f"Answer: {answer}")
+            typer.echo(f"Answer: {rag_query.output}")
             typer.echo("\nCitations:")
-            citation_text = format_citations_as_text(citations)
+            citation_text = format_citations_as_text(rag_query.citations)
             typer.echo(citation_text)
-            if not evidence_found:
+            if not rag_query.evidence_found:
                 typer.echo("\nNote: No credible evidence found in meeting records.")
         
     except Exception as e:
