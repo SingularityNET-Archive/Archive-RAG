@@ -1,5 +1,5 @@
 # Archive-RAG Dependencies
-# Python 3.11
+# Python 3.11+ (tested with Python 3.11, 3.12, and 3.13)
 
 # Core RAG Dependencies
 sentence-transformers>=2.2.0

@@ -25,8 +25,8 @@ See [quickstart.md](specs/001-archive-meeting-rag/quickstart.md) for detailed se
 git clone <repository-url>
 cd Archive-RAG
 
-# Create virtual environment
-python3.11 -m venv venv
+# Create virtual environment (Python 3.11+ required, tested with Python 3.13)
+python3 -m venv venv  # or python3.11 -m venv venv if you have Python 3.11
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
@@ -91,7 +91,7 @@ See [.specify/memory/constitution.md](.specify/memory/constitution.md) for detai
 
 ## Requirements
 
-- Python 3.11
+- Python 3.11+ (tested with Python 3.11, 3.12, and 3.13)
 - 4GB+ RAM available
 - Meeting JSON files in required format (see data-model.md)
 

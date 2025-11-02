@@ -5,7 +5,7 @@
 
 ## Prerequisites
 
-- Python 3.11 (locked version)
+- Python 3.11+ (tested with Python 3.11, 3.12, and 3.13)
 - pip package manager
 - 4GB+ RAM available
 - Meeting JSON files in required format (see MeetingRecord in data-model.md)
@@ -17,8 +17,8 @@
 git clone <repository-url>
 cd Archive-RAG
 
-# Create virtual environment
-python3.11 -m venv venv
+# Create virtual environment (Python 3.11+ required)
+python3 -m venv venv  # or python3.11 -m venv venv if you have Python 3.11
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
