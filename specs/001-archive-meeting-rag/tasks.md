@@ -107,7 +107,7 @@
 - [ ] T036 [US2] Implement audit log writer service in src/services/audit_writer.py (immutable JSON logs, structured format with query, retrieved sources, model version, output, user ID)
 - [ ] T037 [US2] Integrate SSO user ID extraction in src/lib/auth.py (FR-013 - extract user ID from SSO context for audit logs)
 - [ ] T038 [US2] Implement audit log retention logic in src/services/audit_retention.py (3-year retention per FR-014)
-- [ ] T039 [US2] Implement audit-view CLI command in src/cli/audit_view.py (view logs, filter by query-id, user-id, date-from, date-to, format, export)
+- [ ] T039 [US2] Implement audit-view CLI command in src/cli/audit_view.py (view logs, filter by query-id, user-id, date-from, date-to, format, export - supports peer review workflow per SC-006)
 - [ ] T040 [US2] Register audit-view command in src/cli/main.py
 - [ ] T041 [US2] Add audit logging to index command (log indexing operations)
 
@@ -149,7 +149,7 @@
 
 **Goal**: Provide benchmark questions + scoring script to measure factuality & citation compliance. Guarantees ongoing trust and prevents silent hallucination regressions.
 
-**Independent Test**: Execute evaluation script → score RAG performance, flag incorrect answers. Validate citation accuracy ≥90% (SC-001), hallucination count = 0 (SC-002), retrieval latency <2s (SC-003).
+**Independent Test**: Execute evaluation script → score RAG performance, flag incorrect answers. Validate citation accuracy ≥90% (SC-001), hallucination count = 0 (SC-002), retrieval latency <2s (SC-003), reproducible audit logs (SC-004), entity extraction precision ≥85% (SC-005), peer review <3 steps (SC-006).
 
 ### Tests for User Story 4 (OPTIONAL - Test-First Governance) ⚠️
 
@@ -172,6 +172,9 @@
 - [ ] T065 [US4] Implement evaluate CLI command in src/cli/evaluate.py (evaluate command: INDEX_FILE, BENCHMARK_FILE, OUTPUT_DIR, options for model, model-version, seed, output-format)
 - [ ] T066 [US4] Register evaluate command in src/cli/main.py
 - [ ] T067 [US4] Add audit logging for evaluation operations
+- [ ] T068 [US4] Implement reproducible audit log validation in tests/integration/test_audit_reproducibility.py (validate SC-004: same query + seed produces identical audit log)
+- [ ] T069 [US4] Add entity extraction precision validation to evaluation runner in src/services/evaluation_runner.py (compute and validate ≥85% precision per SC-005)
+- [ ] T070 [US4] Implement peer review workflow validation in tests/integration/test_peer_review_workflow.py (validate SC-006: peer reviewer validates claim in <3 CLI steps using audit-view)
 
 **Checkpoint**: At this point, all user stories should now be independently functional. The system includes full evaluation capabilities to measure and maintain citation accuracy and factuality.
 
@@ -181,19 +184,19 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T068 [P] Create sample meeting JSON files in data/sample/ for testing
-- [ ] T069 [P] Add comprehensive error handling across all CLI commands (invalid JSON, index not found, model loading failure, etc.)
-- [ ] T070 [P] Implement deterministic seed management across all services (embeddings, LLM inference, FAISS, topic modeling)
-- [ ] T071 [P] Add version tracking for models in index metadata (embedding version, LLM version for reproducibility)
-- [ ] T072 [P] Optimize FAISS index for <2s retrieval latency (IndexFlatIP or IndexIVFFlat for 10k docs)
-- [ ] T073 [P] Implement memory optimization for <4GB RAM target (quantized models, lazy loading)
-- [ ] T074 [P] Add golden file tests for citation format validation in tests/golden/test_citation_format.py
-- [ ] T075 [P] Add integration tests for end-to-end query flow with real meeting JSON in tests/integration/test_full_rag_flow.py
-- [ ] T076 Update quickstart.md validation (verify all commands work as documented)
-- [ ] T077 [P] Add unit tests for utility functions in tests/unit/ (hashing, PII detection, citation parsing, validation)
-- [ ] T078 [P] Security hardening: validate input sanitization, secure hash storage, PII redaction verification
-- [ ] T079 [P] Performance testing: validate <2s retrieval latency for 10k docs, <4GB RAM usage
-- [ ] T080 Documentation updates: ensure README.md reflects quickstart.md, add architecture diagrams if needed
+- [ ] T071 [P] Create sample meeting JSON files in data/sample/ for testing
+- [ ] T072 [P] Add comprehensive error handling across all CLI commands (invalid JSON, index not found, model loading failure, etc.)
+- [ ] T073 [P] Implement deterministic seed management across all services (embeddings, LLM inference, FAISS, topic modeling)
+- [ ] T074 [P] Add version tracking for models in index metadata (embedding version, LLM version for reproducibility)
+- [ ] T075 [P] Optimize FAISS index for <2s retrieval latency (IndexFlatIP or IndexIVFFlat for 10k docs)
+- [ ] T076 [P] Implement memory optimization for <4GB RAM target (quantized models, lazy loading)
+- [ ] T077 [P] Add golden file tests for citation format validation in tests/golden/test_citation_format.py
+- [ ] T078 [P] Add integration tests for end-to-end query flow with real meeting JSON in tests/integration/test_full_rag_flow.py
+- [ ] T079 Update quickstart.md validation (verify all commands work as documented)
+- [ ] T080 [P] Add unit tests for utility functions in tests/unit/ (hashing, PII detection, citation parsing, validation)
+- [ ] T081 [P] Security hardening: validate input sanitization, secure hash storage, PII redaction verification
+- [ ] T082 [P] Performance testing: validate <2s retrieval latency for 10k docs, <4GB RAM usage
+- [ ] T083 Documentation updates: ensure README.md reflects quickstart.md, add architecture diagrams if needed
 
 ---
 
@@ -247,8 +250,8 @@
   - Services (T021-T028) must run sequentially due to dependencies
 - **User Story 2**: Tests (T032, T033, T034) can run in parallel
 - **User Story 3**: Tests (T042, T043, T044, T045) can run in parallel
-- **User Story 4**: Tests (T054, T055, T056, T057) can run in parallel
-- **Polish Phase**: Many tasks marked [P] can run in parallel
+- **User Story 4**: Tests (T054, T055, T056, T057) can run in parallel; Validation tasks (T068, T069, T070) can run in parallel
+- **Polish Phase**: Many tasks marked [P] can run in parallel (T071-T082)
 
 ---
 
