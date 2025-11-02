@@ -47,8 +47,12 @@ Refactor the Archive-RAG data model from a flat JSON structure to a relational e
 
 **Constraints**: 
 - Python-only (constitution requirement)
-- Local embeddings + FAISS (constitution requirement)
-- No external API dependency for core (constitution requirement)
+- **Default**: Local embeddings + FAISS (constitution-compliant default)
+- **Opt-in**: Remote model connections allowed for memory-efficient processing (embeddings and LLM inference via API endpoints)
+- Remote processing MUST be explicitly enabled via configuration (defaults to local)
+- Remote processing MUST provide automatic fallback to local processing if unavailable
+- FAISS vector storage remains local for performance and determinism (constitution requirement)
+- No external API dependency for core functionality by default (local-first principle)
 - Must preserve backward compatibility for read operations during migration
 - Must support both relational queries and vector similarity search
 - **Must preserve URL ingestion**: Continue to support ingestion from GitHub URL (`https://raw.githubusercontent.com/SingularityNET-Archive/SingularityNET-Archive/refs/heads/main/Data/Snet-Ambassador-Program/Meeting-Summaries/2025/meeting-summaries-array.json`)
@@ -73,12 +77,13 @@ Verify compliance with Archive-RAG Constitution principles:
 - ✅ **V. Auditability & Transparency**: Immutable logs, audit records, traceable topic/entity extraction implemented? **YES** - Entity relationships enhance traceability; existing audit logging continues to function.
 - ✅ **Additional Constraints**: 
   - ✅ Python-only? **YES** - Implementation in Python
-  - ✅ Local embeddings + FAISS? **YES** - FAISS index preserved; entity model supports extraction from decision items
-  - ✅ No external API dependency for core? **YES** - Relational storage can be local SQLite or local graph DB
+  - ✅ Local embeddings + FAISS (default), or remote processing (opt-in)? **YES** - FAISS index preserved; entity model supports extraction from decision items; remote processing available as opt-in via configuration
+  - ✅ Remote processing configured? If yes, fallback to local implemented? **YES** - Entity model implementation supports both local and remote processing modes with automatic fallback
+  - ✅ No external API dependency for core by default? **YES** - Local-first principle preserved; relational storage uses local JSON files (no external API required)
   - ✅ SHA-256 hashing for tamper detection? **YES** - Continue existing hashing approach
   - ✅ PII redaction? **YES** - Existing PII detection/redaction continues
   - ✅ Bounded retrieval latency? **YES** - Success criteria specify performance targets (<2-3 seconds)
-  - ✅ Safe degradation? **YES** - Migration preserves data; validation prevents invalid states
+  - ✅ Safe degradation? **YES** - Migration preserves data; validation prevents invalid states; remote processing falls back to local if unavailable
   - ✅ Explainability? **YES** - Entity relationships improve traceability of sources
 
 **Constitution Compliance**: ✅ **PASS** - All principles satisfied. Entity model enhances rather than violates constitution requirements.
@@ -177,4 +182,4 @@ entities/
 
 > **Fill ONLY if Constitution Check has violations that must be justified**
 
-No constitution violations. Entity model enhances existing system without introducing external dependencies or violating Python-only, local-first principles.
+No constitution violations. Entity model enhances existing system without introducing external dependencies or violating Python-only, local-first principles. Remote processing support (v1.1.0) is available as opt-in feature but defaults to local processing to maintain constitution compliance.
