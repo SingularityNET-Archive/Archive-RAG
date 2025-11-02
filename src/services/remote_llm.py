@@ -115,6 +115,44 @@ class RemoteLLMService:
                 },
                 timeout=120
             )
+            # Handle 503 (model loading) - wait and retry once
+            if response.status_code == 503:
+                import time
+                logger.warning("huggingface_model_loading", model=self.model_name, wait_seconds=10)
+                time.sleep(10)  # Wait for model to load
+                response = requests.post(
+                    f"{HUGGINGFACE_INFERENCE_URL}/models/{self.model_name}",
+                    headers=headers,
+                    json={
+                        "inputs": prompt,
+                        "parameters": {
+                            "max_new_tokens": max_length,
+                            "temperature": temperature,
+                            "return_full_text": False
+                        }
+                    },
+                    timeout=120
+                )
+            
+            # Log error details before raising
+            if response.status_code >= 400:
+                error_text = response.text[:500] if response.text else "No error message"
+                logger.error(
+                    "huggingface_api_error",
+                    status_code=response.status_code,
+                    error=error_text,
+                    url=f"{HUGGINGFACE_INFERENCE_URL}/models/{self.model_name}",
+                    model=self.model_name
+                )
+                
+                # If 404, suggest model might not exist or URL is wrong
+                if response.status_code == 404:
+                    logger.warning(
+                        "huggingface_model_not_found",
+                        model=self.model_name,
+                        suggestion="Model not found on HuggingFace Inference API. Check model name or use a different model."
+                    )
+            
             response.raise_for_status()
             result = response.json()
             
