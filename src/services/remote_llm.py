@@ -92,7 +92,16 @@ class RemoteLLMService:
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
-            logger.error("openai_generation_failed", error=str(e))
+            error_str = str(e)
+            # Check for quota errors (429) and log as warning instead of error
+            if "429" in error_str or "insufficient_quota" in error_str.lower() or "quota" in error_str.lower():
+                logger.warning(
+                    "openai_quota_exceeded",
+                    error=error_str,
+                    suggestion="OpenAI quota exceeded. Falling back to template-based generation."
+                )
+            else:
+                logger.error("openai_generation_failed", error=error_str)
             raise
     
     def _generate_huggingface(self, prompt: str, max_length: int, temperature: float) -> str:

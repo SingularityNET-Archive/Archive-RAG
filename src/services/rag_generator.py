@@ -142,7 +142,17 @@ Answer:"""
                 logger.info("answer_generated_remote", query=query[:50], answer_length=len(answer))
                 return answer
             except Exception as e:
-                logger.error("remote_generation_failed", error=str(e), fallback="template")
+                error_str = str(e)
+                # Check for quota errors and log as warning
+                if "429" in error_str or "insufficient_quota" in error_str.lower() or "quota" in error_str.lower():
+                    logger.warning(
+                        "remote_generation_quota_exceeded",
+                        error=error_str,
+                        fallback="template",
+                        suggestion="OpenAI quota exceeded. Using template-based generation."
+                    )
+                else:
+                    logger.error("remote_generation_failed", error=error_str, fallback="template")
                 # Fallback to template
                 return self._template_generate(query, retrieved_context)
         
