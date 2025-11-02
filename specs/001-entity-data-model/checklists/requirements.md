@@ -36,3 +36,4 @@
 - Entity relationships are clearly defined without specifying implementation (database type, ORM, etc.)
 - Success criteria focus on user-facing outcomes (query performance, data integrity, content retrieval) rather than technical metrics
 
+
