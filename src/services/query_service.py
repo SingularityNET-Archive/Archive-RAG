@@ -68,6 +68,30 @@ class QueryService:
                 model_name=embedding_index.embedding_model
             )
             
+            # Validate embedding dimension matches index
+            service_dim = embedding_service.get_embedding_dimension()
+            index_dim = embedding_index.embedding_dimension
+            
+            if service_dim != index_dim:
+                error_msg = (
+                    f"Embedding dimension mismatch: "
+                    f"Service dimension ({service_dim}D) does not match index dimension ({index_dim}D).\n"
+                    f"Index was created with model: {embedding_index.embedding_model}\n"
+                    f"Current embedding service model: {embedding_service.model_name}\n\n"
+                    f"Solution: Re-index with the current embedding model:\n"
+                    f"  archive-rag index <input> {index_name}\n\n"
+                    f"Or use the same embedding model that was used to create the index."
+                )
+                logger.error(
+                    "embedding_dimension_mismatch",
+                    query_id=query_id,
+                    service_dim=service_dim,
+                    index_dim=index_dim,
+                    index_model=embedding_index.embedding_model,
+                    service_model=embedding_service.model_name
+                )
+                raise ValueError(error_msg)
+            
             # Query index
             retrieved_chunks = query_index(
                 query_text,

@@ -86,8 +86,43 @@ def retrieve_similar_chunks(
     query_embedding = query_embedding.reshape(1, -1)
     faiss.normalize_L2(query_embedding)
     
+    # Validate dimension match
+    query_dim = query_embedding.shape[1]
+    index_dim = index.d
+    
+    if query_dim != index_dim:
+        error_msg = (
+            f"Embedding dimension mismatch: "
+            f"Query embedding dimension ({query_dim}D) does not match index dimension ({index_dim}D).\n"
+            f"This usually means the embedding model changed since the index was created.\n\n"
+            f"Solution: Re-index with the current embedding model."
+        )
+        logger.error(
+            "embedding_dimension_mismatch_in_retrieval",
+            query_dim=query_dim,
+            index_dim=index_dim
+        )
+        raise ValueError(error_msg)
+    
     # Search index
-    scores, indices = index.search(query_embedding, top_k)
+    try:
+        scores, indices = index.search(query_embedding, top_k)
+    except AssertionError as e:
+        # FAISS raises empty AssertionError on dimension mismatch
+        # Catch and provide clearer error message
+        error_msg = (
+            f"FAISS index search failed: Embedding dimension mismatch.\n"
+            f"Query embedding dimension: {query_embedding.shape[1]}D\n"
+            f"Index dimension: {index_dim}D\n\n"
+            f"This usually means the embedding model changed since the index was created.\n\n"
+            f"Solution: Re-index with the current embedding model."
+        )
+        logger.error(
+            "faiss_search_failed_dimension_mismatch",
+            query_dim=query_embedding.shape[1],
+            index_dim=index_dim
+        )
+        raise ValueError(error_msg) from e
     
     # Retrieve chunks with metadata
     retrieved_chunks = []
