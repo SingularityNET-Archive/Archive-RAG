@@ -1,23 +1,34 @@
 <!--
   Sync Impact Report:
   
-  Version change: 1.0.0 → 1.1.0 (MINOR: Added opt-in remote processing guidance)
+  Version change: 1.1.0 → 2.0.0 (MAJOR: Removed local processing, remote-only allowed)
   
   Modified principles:
-    - Technology Discipline: Expanded to allow remote model connections as opt-in feature (local-first preserved as default)
+    - Technology Discipline: Changed from local-first with opt-in remote to remote-only requirement
   
-  Added sections:
-    - Technology Discipline: Remote Processing guidance (opt-in, memory-efficient alternative)
+  Added sections: None
   
-  Removed sections: None
+  Removed sections:
+    - Technology Discipline: Local embeddings + FAISS storage option removed
+    - Technology Discipline: Automatic fallback to local processing requirement removed
+    - Technology Discipline: Local-first principle removed
+    - Technology Discipline: "No external API dependency for core functionality by default" removed
   
   Templates requiring updates:
-    ✅ plan-template.md (constitution check section updated to reflect remote processing as optional)
+    ⚠️ plan-template.md (constitution check section needs update - local processing references removed)
     ✅ spec-template.md (no direct constitution references, compatible)
     ✅ tasks-template.md (no direct constitution references, compatible)
     ✅ checklist-template.md (no direct constitution references, compatible)
   
-  Follow-up TODOs: None
+  Documentation requiring updates:
+    ⚠️ REMOTE_PROCESSING.md (update to reflect remote-only requirement)
+    ⚠️ REMOTE_SETUP_QUICKSTART.md (update to reflect remote-only requirement)
+    ⚠️ Code references: src/services/embedding.py, src/services/rag_generator.py (remove local fallback logic)
+  
+  Follow-up TODOs:
+    - Update all documentation to reflect remote-only requirement
+    - Remove local processing code paths (fallback logic)
+    - Update migration guide for users currently using local processing
 -->
 
 # Archive-RAG Constitution
@@ -76,12 +87,9 @@ All actions must be visible and reviewable.
 ### Technology Discipline
 
 - Python-only execution environment
-- **Default**: Local embeddings + FAISS storage (constitution-compliant)
-- **Opt-in**: Remote model connections allowed for memory-efficient processing (embeddings and LLM inference via API endpoints)
-- Remote processing MUST be explicitly enabled via configuration (defaults to local)
-- Remote processing MUST provide automatic fallback to local processing if unavailable
+- **Remote model connections required** for memory-efficient processing (embeddings and LLM inference via API endpoints)
+- Remote processing MUST be configured via environment variables (API URLs and keys)
 - FAISS vector storage remains local for performance and determinism
-- No external API dependency for core functionality by default (local-first principle)
 - CLI support for all major pipeline stages
 
 ### Performance & Reliability
@@ -104,4 +112,4 @@ This constitution supersedes all other practices and conventions. Amendments req
 
 All development work must align with these principles. When conflicts arise between practices, the constitution takes precedence.
 
-**Version**: 1.1.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-02
+**Version**: 2.0.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-02

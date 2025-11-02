@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from .index import index_command
-from .query import query_command, query_workgroup_command, query_person_command, query_meeting_command
+from .query import query_command, query_workgroup_command, query_person_command, query_meeting_command, query_decisions_command
 from .audit_view import audit_view_command
 from .topic_model import topic_model_command
 from .extract_entities import extract_entities_command
@@ -161,6 +161,30 @@ def query_person(
 ):
     """Query information for a specific person, optionally including action items."""
     query_person_command(person_id=person_id, action_items=action_items, output_format=output_format)
+
+
+@app.command()
+def query_decisions(
+    index_file: str = typer.Argument(..., help="Path to FAISS index file"),
+    query_text: str = typer.Argument(..., help="Free text query for decisions"),
+    top_k: int = typer.Option(5, "--top-k", help="Number of decisions to retrieve"),
+    min_score: float = typer.Option(0.0, "--min-score", help="Minimum relevance score threshold (0.0 to 1.0)"),
+    output_format: str = typer.Option("text", "--output-format", help="Output format: text or json"),
+    include_rationale: bool = typer.Option(True, "--include-rationale/--no-rationale", help="Include decision rationale in output"),
+    include_effect: bool = typer.Option(True, "--include-effect/--no-effect", help="Include decision effect scope in output"),
+    include_score: bool = typer.Option(False, "--include-score/--no-score", help="Include relevance score in output")
+):
+    """Query meeting decisions using free text search via RAG index."""
+    query_decisions_command(
+        index_file=index_file,
+        query_text=query_text,
+        top_k=top_k,
+        min_score=min_score,
+        output_format=output_format,
+        include_rationale=include_rationale,
+        include_effect=include_effect,
+        include_score=include_score
+    )
 
 
 @app.command()

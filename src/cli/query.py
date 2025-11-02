@@ -10,6 +10,7 @@ from uuid import UUID
 from ..services.query_service import create_query_service
 from ..services.citation_extractor import format_citations_as_text
 from ..services.entity_query import EntityQueryService
+from ..services.decision_query import query_decisions_by_text, format_decision_results
 from ..lib.config import DEFAULT_TOP_K, DEFAULT_SEED
 from ..lib.auth import get_user_id
 from ..lib.logging import get_logger
@@ -288,5 +289,96 @@ def query_person_command(
     except Exception as e:
         logger.error("query_person_failed", error=str(e), person_id=person_id)
         typer.echo(f"Query person failed: {e}", err=True)
+        raise typer.Exit(code=1)
+
+
+def query_decisions_command(
+    index_file: str = typer.Argument(..., help="Path to FAISS index file"),
+    query_text: str = typer.Argument(..., help="Free text query for decisions"),
+    top_k: int = typer.Option(
+        DEFAULT_TOP_K,
+        "--top-k",
+        help="Number of decisions to retrieve"
+    ),
+    min_score: float = typer.Option(
+        0.0,
+        "--min-score",
+        help="Minimum relevance score threshold (0.0 to 1.0)"
+    ),
+    output_format: str = typer.Option(
+        "text",
+        "--output-format",
+        help="Output format: text or json"
+    ),
+    include_rationale: bool = typer.Option(
+        True,
+        "--include-rationale/--no-rationale",
+        help="Include decision rationale in output"
+    ),
+    include_effect: bool = typer.Option(
+        True,
+        "--include-effect/--no-effect",
+        help="Include decision effect scope in output"
+    ),
+    include_score: bool = typer.Option(
+        False,
+        "--include-score/--no-score",
+        help="Include relevance score in output"
+    )
+):
+    """
+    Query meeting decisions using free text search.
+    
+    Uses the RAG index to find meetings relevant to your query, then returns
+    the actual DecisionItem entities from those meetings. This allows you to
+    search for decisions using natural language queries.
+    
+    Examples:
+      archive-rag query-decisions indexes/meetings.faiss "budget decisions"
+      archive-rag query-decisions indexes/meetings.faiss "what were the decisions about funding?"
+      archive-rag query-decisions indexes/meetings.faiss "decisions that affect other people"
+    """
+    try:
+        # Query decisions using free text
+        results = query_decisions_by_text(
+            query_text=query_text,
+            index_name=index_file,
+            top_k=top_k,
+            min_score=min_score
+        )
+        
+        # Format output
+        if output_format == "json":
+            import json
+            # Convert DecisionItem objects to dictionaries
+            results_data = []
+            for result in results:
+                decision_dict = result["decision"].model_dump(mode="json")
+                results_data.append({
+                    "decision": decision_dict,
+                    "meeting_id": str(result["meeting_id"]),
+                    "relevance_score": result["relevance_score"],
+                    "chunk_text": result.get("chunk_text", "")
+                })
+            typer.echo(json.dumps({
+                "query": query_text,
+                "results": results_data,
+                "count": len(results_data)
+            }, indent=2))
+        else:
+            # Text format
+            formatted_output = format_decision_results(
+                results,
+                include_rationale=include_rationale,
+                include_effect=include_effect,
+                include_score=include_score
+            )
+            typer.echo(formatted_output)
+        
+        logger.info("query_decisions_success", query_text=query_text[:50], result_count=len(results))
+        
+    except Exception as e:
+        logger.error("query_decisions_failed", error=str(e), query_text=query_text[:50] if query_text else "")
+        typer.echo(f"Query decisions failed: {e}", err=True)
         raise typer.Exit(code=1)
 
