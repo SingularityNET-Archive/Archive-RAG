@@ -31,7 +31,19 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Verify compliance with Archive-RAG Constitution principles:
+
+- **I. Truth-Bound Intelligence**: All outputs grounded in archived meeting data with traceable sources?
+- **II. Evidence & Citation First**: Required citation format `[meeting_id | date | speaker]` supported?
+- **III. Reproducibility & Determinism**: Version-locked embeddings, deterministic seeds, reproducible inference?
+- **IV. Test-First Governance**: Benchmark suite, retrieval accuracy, citation validity, factuality checks included?
+- **V. Auditability & Transparency**: Immutable logs, audit records, traceable topic/entity extraction implemented?
+- **Additional Constraints**: 
+  - Python-only? Local embeddings + FAISS? No external API dependency for core?
+  - SHA-256 hashing for tamper detection? PII redaction?
+  - Bounded retrieval latency? Safe degradation? Explainability?
+
+Flag any violations in Complexity Tracking section below.
 
 ## Project Structure
 
