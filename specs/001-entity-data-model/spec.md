@@ -15,6 +15,10 @@
 - Q: Should agenda items be required to have at least one action item or decision item? → A: Allow empty agenda items - Agenda items can exist without action items or decision items (placeholder topics)
 - Q: How should the system handle invalid or inaccessible document links? → A: Store as-is, validate on access - Accept links during ingestion, detect broken links when documents are accessed
 
+### Session 2025-11-02 (continued)
+
+- Q: How should the system handle meetings with no participants given the contradiction between FR-024 (validation requires participants) and SC-009 (handles no participants without errors)? → A: Reject new meetings with no participants (validation fails), but allow reading/migrating legacy meetings that had no participants
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Query Meetings by Workgroup (Priority: P1)
@@ -101,8 +105,8 @@ A user needs to find meetings by topics covered or emotional tone to discover re
 
 - When a person is deleted, all associated action items are cascade deleted (person-action item relationship)
 - When a workgroup is deleted, all associated meetings (and their related entities: documents, agenda items, action items, decision items, tags) are cascade deleted
-- System requires at least one participant per meeting - meetings with empty participant lists are invalid and rejected during validation
-- How are meetings handled that have canceled summaries or no summaries given?
+- System requires at least one participant per meeting for new meetings (validation fails if participant list is empty) - legacy meetings with no participants can be read/migrated but should be flagged
+- Meetings with canceled summaries or no summaries given are stored with flags set (`canceled_summary=true` or `no_summary_given=true`), returned in queries, and marked appropriately in query results
 - Agenda items without action items or decision items are valid - system allows empty agenda items as placeholder topics
 - Document links are stored as-is during ingestion - validation occurs on access when documents are retrieved, broken links are detected but do not block ingestion
 
@@ -165,7 +169,7 @@ A user needs to find meetings by topics covered or emotional tone to discover re
 - **SC-006**: System supports storing and retrieving meetings with full entity relationships without data loss
 - **SC-007**: Users can navigate from a meeting to all related entities (people, documents, agenda items) in under 2 seconds per relationship type
 - **SC-008**: RAG system can extract and embed transcript content from decision items with 100% coverage of decision text
-- **SC-009**: System handles meetings with no participants or empty transcripts without errors
+- **SC-009**: System handles legacy meetings with no participants or empty transcripts gracefully during migration (allows reading/migrating legacy data without errors, but new meetings must have at least one participant per FR-024)
 - **SC-010**: Migration from existing flat data structure to relational model preserves 100% of meeting content and associations
 
 ## Assumptions
