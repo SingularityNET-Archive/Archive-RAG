@@ -59,11 +59,16 @@ export ARCHIVE_RAG_LLM_MODEL="gpt-3.5-turbo"
 
 #### HuggingFace Inference API
 
+**Note**: Many sentence-transformers models are configured for similarity tasks, not feature extraction. Use BAAI/bge models for embeddings:
+
 ```bash
 export ARCHIVE_RAG_REMOTE_EMBEDDINGS=true
 export ARCHIVE_RAG_EMBEDDING_API_URL="https://api-inference.huggingface.co"
 export ARCHIVE_RAG_EMBEDDING_API_KEY="hf_..."  # or use HUGGINGFACE_API_KEY
-export ARCHIVE_RAG_EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2"
+export ARCHIVE_RAG_EMBEDDING_MODEL="BAAI/bge-small-en-v1.5"  # Recommended: supports feature extraction (384-dim)
+# Alternative models that work:
+# - BAAI/bge-base-en-v1.5 (768-dim)
+# - BAAI/bge-large-en-v1.5 (1024-dim)
 
 export ARCHIVE_RAG_REMOTE_LLM=true
 export ARCHIVE_RAG_LLM_API_URL="https://api-inference.huggingface.co"
