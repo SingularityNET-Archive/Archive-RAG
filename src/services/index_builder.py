@@ -40,7 +40,9 @@ def build_faiss_index(
     
     # Generate embeddings for all chunks
     texts = [chunk.text for chunk in chunks]
-    embeddings = embedding_service.embed_texts(texts)
+    logger.info("generating_embeddings", num_chunks=len(texts))
+    embeddings = embedding_service.embed_texts(texts, batch_size=32)
+    logger.info("embeddings_generated", shape=embeddings.shape)
     
     # Get embedding dimension
     embedding_dim = embedding_service.get_embedding_dimension()

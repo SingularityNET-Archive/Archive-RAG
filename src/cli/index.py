@@ -65,15 +65,21 @@ def index_command(
     """
     try:
         # Initialize embedding service
+        typer.echo("Initializing embedding service...")
         embedding_service = create_embedding_service(model_name=embedding_model)
+        typer.echo(f"✓ Embedding service initialized: {embedding_model}")
         
         # Initialize PII detector if needed
         pii_detector = None
         if redact_pii:
+            typer.echo("Initializing PII detector...")
             pii_detector = create_pii_detector()
+            typer.echo("✓ PII detector initialized")
         
         # Ingest meeting files
+        typer.echo(f"Ingesting meeting files from {input_dir}...")
         meeting_records = ingest_meeting_directory(input_dir)
+        typer.echo(f"✓ Ingested {len(meeting_records)} meeting files")
         
         if hash_only:
             # Only compute hashes
@@ -81,29 +87,38 @@ def index_command(
             return
         
         # Chunk transcripts
+        typer.echo("Chunking transcripts...", nl=False)
+        typer.echo(" ", nl=True)  # Force flush
         all_chunks = []
-        for meeting_record, file_hash in meeting_records:
+        for i, (meeting_record, file_hash) in enumerate(meeting_records, 1):
             chunks = chunk_transcript(
                 meeting_record,
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap
             )
             all_chunks.extend(chunks)
+            typer.echo(f"  ✓ Meeting {i}/{len(meeting_records)}: {meeting_record.id} -> {len(chunks)} chunks", err=False)
+        
+        typer.echo(f"✓ Created {len(all_chunks)} total chunks from {len(meeting_records)} meetings")
         
         if not all_chunks:
             typer.echo("No chunks created. Check input files.", err=True)
             raise typer.Exit(code=1)
         
         # Build FAISS index
+        typer.echo("Generating embeddings (this may take a moment)...")
         index, embedding_index = build_faiss_index(
             all_chunks,
             embedding_service,
             index_type="IndexFlatIP",
             index_name=output_index
         )
+        typer.echo("✓ Embeddings generated and index built")
         
         # Save index
+        typer.echo(f"Saving index to {output_index}...")
         save_index(index, embedding_index, output_index)
+        typer.echo("✓ Index saved")
         
         # Create audit log for indexing operation
         audit_writer = AuditWriter()

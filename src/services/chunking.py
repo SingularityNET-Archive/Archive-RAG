@@ -95,13 +95,18 @@ def chunk_transcript(
         if start_idx <= 0:
             break
     
-    logger.info(
-        "transcript_chunked",
-        meeting_id=meeting_record.id,
-        total_chunks=len(chunks),
-        chunk_size=chunk_size,
-        overlap=chunk_overlap
-    )
+    # Log chunking result (non-blocking)
+    try:
+        logger.debug(
+            "transcript_chunked",
+            meeting_id=meeting_record.id,
+            total_chunks=len(chunks),
+            chunk_size=chunk_size,
+            overlap=chunk_overlap
+        )
+    except Exception:
+        # Don't let logging block chunking
+        pass
     
     return chunks
 

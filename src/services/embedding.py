@@ -26,8 +26,9 @@ class EmbeddingService:
             device: Device to use ("cpu" or "cuda", None for auto)
         """
         self.model_name = model_name
+        # Loading model can take time - this is where the "hang" actually occurs
         self.model = SentenceTransformer(model_name, device=device)
-        logger.info("embedding_service_initialized", model_name=model_name)
+        logger.debug("embedding_service_initialized", model_name=model_name)
     
     def embed_text(self, text: str) -> np.ndarray:
         """
