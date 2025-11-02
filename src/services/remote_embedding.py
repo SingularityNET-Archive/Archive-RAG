@@ -127,8 +127,8 @@ class RemoteEmbeddingService:
             batch = texts[i:i + batch_size]
             
             try:
-                # HuggingFace inference API format
-                # URL format: https://api-inference.huggingface.co/models/{model_name}
+                # HuggingFace Inference Providers API format (migrated from deprecated api-inference.huggingface.co)
+                # URL format: https://router.huggingface.co/hf-inference/models/{model_name}
                 # Remove any existing /models or /pipeline path from api_url
                 base_url = self.api_url.rstrip('/')
                 if '/models' in base_url:

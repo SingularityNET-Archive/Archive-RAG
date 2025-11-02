@@ -58,8 +58,8 @@ export ARCHIVE_RAG_LLM_API_URL="https://api.openai.com/v1"
 
 ### HuggingFace Inference API
 ```bash
-export ARCHIVE_RAG_EMBEDDING_API_URL="https://api-inference.huggingface.co"
-export ARCHIVE_RAG_LLM_API_URL="https://api-inference.huggingface.co"
+export ARCHIVE_RAG_EMBEDDING_API_URL="https://router.huggingface.co/hf-inference"
+export ARCHIVE_RAG_LLM_API_URL="https://router.huggingface.co/hf-inference"
 export HUGGINGFACE_API_KEY="hf-your-key-here"
 ```
 

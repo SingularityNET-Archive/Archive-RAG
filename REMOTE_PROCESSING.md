@@ -63,7 +63,7 @@ export ARCHIVE_RAG_LLM_MODEL="gpt-3.5-turbo"
 
 ```bash
 export ARCHIVE_RAG_REMOTE_EMBEDDINGS=true
-export ARCHIVE_RAG_EMBEDDING_API_URL="https://api-inference.huggingface.co"
+export ARCHIVE_RAG_EMBEDDING_API_URL="https://router.huggingface.co/hf-inference"
 export ARCHIVE_RAG_EMBEDDING_API_KEY="hf_..."  # or use HUGGINGFACE_API_KEY
 export ARCHIVE_RAG_EMBEDDING_MODEL="BAAI/bge-small-en-v1.5"  # Recommended: supports feature extraction (384-dim)
 # Alternative models that work:
@@ -71,7 +71,7 @@ export ARCHIVE_RAG_EMBEDDING_MODEL="BAAI/bge-small-en-v1.5"  # Recommended: supp
 # - BAAI/bge-large-en-v1.5 (1024-dim)
 
 export ARCHIVE_RAG_REMOTE_LLM=true
-export ARCHIVE_RAG_LLM_API_URL="https://api-inference.huggingface.co"
+export ARCHIVE_RAG_LLM_API_URL="https://router.huggingface.co/hf-inference"
 export HUGGINGFACE_API_KEY="hf_..."
 export ARCHIVE_RAG_LLM_MODEL="mistralai/Mistral-7B-Instruct-v0.2"
 ```

@@ -48,7 +48,7 @@ Update your `.env` file to use a working model:
 ```bash
 ARCHIVE_RAG_PROCESSING_MODE=remote
 ARCHIVE_RAG_REMOTE_EMBEDDINGS=true
-ARCHIVE_RAG_EMBEDDING_API_URL="https://api-inference.huggingface.co"
+ARCHIVE_RAG_EMBEDDING_API_URL="https://router.huggingface.co/hf-inference"
 ARCHIVE_RAG_EMBEDDING_API_KEY="hf_your_api_key_here"
 ARCHIVE_RAG_EMBEDDING_MODEL="BAAI/bge-small-en-v1.5"
 ```
@@ -60,7 +60,7 @@ You can test if a model supports feature extraction:
 ```python
 import requests
 
-API_URL = "https://api-inference.huggingface.co/models/BAAI/bge-small-en-v1.5"
+API_URL = "https://router.huggingface.co/hf-inference/models/BAAI/bge-small-en-v1.5"
 headers = {"Authorization": "Bearer YOUR_API_KEY"}
 
 response = requests.post(
