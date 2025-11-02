@@ -39,11 +39,14 @@ python -m spacy download en_core_web_sm
 ### Basic Usage
 
 ```bash
-# Index meeting JSON files
-archive-rag index data/meetings/ indexes/meetings.faiss
+# Index sample data from official GitHub source (120+ meetings)
+archive-rag index "https://raw.githubusercontent.com/SingularityNET-Archive/SingularityNET-Archive/refs/heads/main/Data/Snet-Ambassador-Program/Meeting-Summaries/2025/meeting-summaries-array.json" indexes/sample-meetings.faiss --no-redact-pii
 
 # Query the RAG system
-archive-rag query indexes/meetings.faiss "What decisions were made about budget allocation?"
+archive-rag query indexes/sample-meetings.faiss "What decisions were made about budget allocation?"
+
+# Or index your own meeting JSON files
+archive-rag index data/meetings/ indexes/meetings.faiss
 
 # View audit logs
 archive-rag audit-view
@@ -63,8 +66,8 @@ Archive-RAG/
 │   ├── integration/       # Integration tests
 │   └── unit/              # Unit tests
 ├── data/                   # Meeting JSON files
-│   ├── sample/            # Sample meeting archives
-│   └── benchmarks/        # Evaluation benchmarks
+│   ├── benchmarks/        # Evaluation benchmarks
+│   └── README.md         # Data usage guide (see official GitHub source for sample data)
 ├── indexes/                # Generated FAISS indexes (git-ignored)
 └── audit_logs/             # Audit logs (git-ignored)
 ```

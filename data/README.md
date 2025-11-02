@@ -1,10 +1,38 @@
-# Using Your Own Meeting Data
+# Using Meeting Data
 
-## Supported Formats
+## Official Sample Data Source
 
-The Archive-RAG system now supports **two formats**:
+The Archive-RAG system uses the **SingularityNET Archive** GitHub repository as the official source for sample data:
 
-### Format 1: Legacy Format (Simple)
+**Source URL**: `https://raw.githubusercontent.com/SingularityNET-Archive/SingularityNET-Archive/refs/heads/main/Data/Snet-Ambassador-Program/Meeting-Summaries/2025/meeting-summaries-array.json`
+
+This URL contains 120+ meetings from various workgroups (Archives, Governance, Education, African Guild, etc.) in the official Archives Workgroup format.
+
+## Quick Start with Sample Data
+
+### Index Sample Data from GitHub
+
+```bash
+# Index all meetings from the official GitHub source
+archive-rag index "https://raw.githubusercontent.com/SingularityNET-Archive/SingularityNET-Archive/refs/heads/main/Data/Snet-Ambassador-Program/Meeting-Summaries/2025/meeting-summaries-array.json" indexes/sample-meetings.faiss --no-redact-pii
+
+# Query the indexed data
+archive-rag query indexes/sample-meetings.faiss "What decisions were made in the Archives Workgroup?"
+```
+
+## Using Your Own Data
+
+You can still use your own meeting data files. The system supports both the **Archives Workgroup Format** (used in the GitHub source) and a **Legacy Format**.
+
+### Supported Formats
+
+#### Format 1: Archives Workgroup Format (Recommended)
+
+This is the format used in the GitHub source. See the [data model specification](../../specs/001-entity-data-model/spec.md) for details.
+
+#### Format 2: Legacy Format
+
+For backward compatibility with simpler meeting records:
 
 ```json
 {
@@ -17,117 +45,58 @@ The Archive-RAG system now supports **two formats**:
 }
 ```
 
-### Format 2: New Format (Archives Workgroup Format)
-
-```json
-{
-  "workgroup": "Archives Workgroup",
-  "workgroup_id": "05ddaaf0-1dde-4d84-a722-f82c8479a8e9",
-  "meetingInfo": {
-    "typeOfMeeting": "Monthly",
-    "date": "2025-01-08",
-    "host": "Stephen [QADAO]",
-    "documenter": "CallyFromAuron",
-    "peoplePresent": "André, CallyFromAuron, Stephen [QADAO]",
-    "purpose": "Regular monthly meeting",
-    "meetingVideoLink": "https://...",
-    "workingDocs": [
-      {
-        "title": "Document Title",
-        "link": "https://..."
-      }
-    ]
-  },
-  "agendaItems": [
-    {
-      "status": "carry over",
-      "actionItems": [
-        {
-          "text": "Action item text",
-          "assignee": "Name",
-          "dueDate": "Date",
-          "status": "todo"
-        }
-      ],
-      "decisionItems": [
-        {
-          "decision": "Decision text extracted as transcript content",
-          "effect": "mayAffectOtherPeople"
-        }
-      ]
-    }
-  ],
-  "tags": {
-    "topicsCovered": "topic1, topic2",
-    "emotions": "interesting, friendly"
-  },
-  "type": "Custom",
-  "noSummaryGiven": false,
-  "canceledSummary": false
-}
-```
-
-## How It Works
-
-The system automatically detects which format you're using:
-
-- **If you provide `workgroup_id` and `meetingInfo`**: Uses new format
-  - Extracts `id` from `workgroup_id`
-  - Extracts `date` from `meetingInfo.date` (converts YYYY-MM-DD to ISO 8601)
-  - Extracts `participants` from `meetingInfo.peoplePresent` (comma-separated string)
-  - Extracts `transcript` from all `agendaItems[].decisionItems[].decision` texts
-  - Extracts `decisions` from decision items
-
-- **If you provide `id`, `date`, `participants`, `transcript`**: Uses legacy format
-
-## Step-by-Step Instructions
-
-### 1. Prepare Your Meeting JSON Files
-
-Create JSON files following either format above.
-
-### 2. Index Your Data
+### Indexing Your Own Data
 
 ```bash
-# Index your files
+# From a local directory
 archive-rag index your-data-directory/ indexes/my-index.faiss
 
-# With PII redaction (recommended)
+# From a URL (single file or array)
+archive-rag index "https://example.com/meetings.json" indexes/my-index.faiss
+
+# With PII redaction (recommended for production)
 archive-rag index --redact-pii your-data-directory/ indexes/my-index.faiss
 ```
 
-### 3. Query Your Data
+## Data Format Details
+
+### Archives Workgroup Format
+
+The GitHub source uses this format, which includes:
+- **Workgroup** information
+- **Meeting metadata** (host, documenter, participants, purpose, video links)
+- **Agenda items** with action items and decision items
+- **Documents** (working docs linked to meetings)
+- **Tags** (topics and emotions)
+
+The system automatically:
+- Extracts `id` from `workgroup_id`
+- Converts `date` from YYYY-MM-DD to ISO 8601
+- Parses `participants` from comma-separated `peoplePresent` string
+- Builds `transcript` from `agendaItems[].decisionItems[].decision` texts
+- Extracts `decisions` from decision items
+
+### Legacy Format
+
+For simpler use cases:
+- Direct `transcript` field
+- Array of `participants`
+- ISO 8601 `date` format
+- Optional `decisions` and `tags` arrays
+
+## Querying Indexed Data
 
 ```bash
-archive-rag query indexes/my-index.faiss "Your question here"
+# Query by question
+archive-rag query indexes/sample-meetings.faiss "What were the key topics in January 2025?"
+
+# Query with output format
+archive-rag query indexes/sample-meetings.faiss "Who participated in governance meetings?" --output-format json
 ```
 
-## Date Format
+## Notes
 
-- **Legacy format**: ISO 8601 datetime (e.g., `"2024-03-15T10:00:00Z"`)
-- **New format**: YYYY-MM-DD date (e.g., `"2025-01-08"`) - automatically converted to ISO 8601
-
-## Participants Format
-
-- **Legacy format**: Array of strings (e.g., `["Alice", "Bob"]`)
-- **New format**: Comma-separated string (e.g., `"André, CallyFromAuron, Stephen [QADAO]"`) - automatically parsed into array
-
-## Transcript Content
-
-- **Legacy format**: Direct `transcript` field
-- **New format**: Extracted from `agendaItems[].decisionItems[].decision` - all decision texts are combined into a single transcript
-
-## Example Directory Structure
-
-```
-data/
-├── my-meetings/
-│   ├── meeting-2024-01-15.json  (legacy format)
-│   ├── meeting-2025-01-08.json   (new format)
-│   └── ...
-└── sample/  (example files)
-    ├── meeting_001.json
-    └── meeting_002.json
-```
-
-You can mix both formats in the same directory - the system handles them automatically!
+- You can mix both formats in the same directory - the system detects and handles them automatically
+- Empty or missing transcripts are automatically skipped during indexing
+- The GitHub source is updated regularly with new meeting summaries
+- For production use, always use PII redaction: `--redact-pii`
