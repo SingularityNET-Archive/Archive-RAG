@@ -1,19 +1,18 @@
 <!--
   Sync Impact Report:
   
-  Version change: 0.0.0 → 1.0.0 (initial constitution)
+  Version change: 1.0.0 → 1.1.0 (MINOR: Added opt-in remote processing guidance)
   
-  Modified principles: N/A (new constitution)
+  Modified principles:
+    - Technology Discipline: Expanded to allow remote model connections as opt-in feature (local-first preserved as default)
   
   Added sections:
-    - Core Principles (I-V)
-    - Additional Constraints (Responsible Data & Privacy, Technology, Performance & Reliability)
-    - Governance
+    - Technology Discipline: Remote Processing guidance (opt-in, memory-efficient alternative)
   
-  Removed sections: N/A (new constitution)
+  Removed sections: None
   
   Templates requiring updates:
-    ✅ plan-template.md (constitution check section exists, will reference principles)
+    ✅ plan-template.md (constitution check section updated to reflect remote processing as optional)
     ✅ spec-template.md (no direct constitution references, compatible)
     ✅ tasks-template.md (no direct constitution references, compatible)
     ✅ checklist-template.md (no direct constitution references, compatible)
@@ -77,8 +76,12 @@ All actions must be visible and reviewable.
 ### Technology Discipline
 
 - Python-only execution environment
-- Local embeddings + FAISS storage
-- No external API dependency for core functionality
+- **Default**: Local embeddings + FAISS storage (constitution-compliant)
+- **Opt-in**: Remote model connections allowed for memory-efficient processing (embeddings and LLM inference via API endpoints)
+- Remote processing MUST be explicitly enabled via configuration (defaults to local)
+- Remote processing MUST provide automatic fallback to local processing if unavailable
+- FAISS vector storage remains local for performance and determinism
+- No external API dependency for core functionality by default (local-first principle)
 - CLI support for all major pipeline stages
 
 ### Performance & Reliability
@@ -101,4 +104,4 @@ This constitution supersedes all other practices and conventions. Amendments req
 
 All development work must align with these principles. When conflicts arise between practices, the constitution takes precedence.
 
-**Version**: 1.0.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-02
+**Version**: 1.1.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-02

@@ -1,23 +1,24 @@
-"""RAG generation service using LLM with retrieved context."""
+"""RAG generation service using LLM with retrieved context (local or remote, opt-in)."""
 
 from typing import List, Dict, Any, Optional
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import torch
 
 from ..lib.config import DEFAULT_SEED
+from ..lib.remote_config import get_llm_remote_config
 from ..lib.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class RAGGenerator:
-    """Service for generating answers using LLM with retrieved context."""
+    """Service for generating answers using LLM with retrieved context (local or remote, opt-in)."""
     
     def __init__(
         self,
         model_name: Optional[str] = None,
         device: Optional[str] = None,
-        seed: int = DEFAULT_SEED
+        seed: int = DEFAULT_SEED,
+        use_remote: Optional[bool] = None
     ):
         """
         Initialize RAG generator.
@@ -26,40 +27,70 @@ class RAGGenerator:
             model_name: Name of LLM model (default: use local model if available)
             device: Device to use ("cpu" or "cuda", None for auto)
             seed: Random seed for reproducibility
+            use_remote: Force remote/local mode (None = auto-detect from env)
         """
         self.model_name = model_name or "gpt2"  # Default fallback
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu") if torch else "cpu"
         self.seed = seed
+        self._remote_service = None
+        self.generator = None
+        self.tokenizer = None
+        self.model = None
         
-        # Set random seed
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
+        # Check if remote processing is enabled
+        remote_enabled, api_url, api_key, remote_model = get_llm_remote_config()
+        if use_remote is None:
+            use_remote = remote_enabled
         
-        try:
-            # Try to load model, but don't fail if unavailable
-            # For offline/local use, we'll use template-based generation as default
-            if model_name and model_name != "gpt2":
-                # Only try to load if a specific model is requested
+        if use_remote and api_url:
+            # Use remote LLM service
+            try:
+                from ..services.remote_llm import RemoteLLMService
+                self._remote_service = RemoteLLMService(
+                    api_url=api_url,
+                    api_key=api_key,
+                    model_name=model_name or remote_model
+                )
+                logger.info("rag_generator_remote_initialized", model_name=model_name or remote_model, api_url=api_url)
+            except ImportError:
+                logger.warning("remote_llm_service_unavailable", fallback="local")
+                use_remote = False
+        
+        if not use_remote:
+            # Use local LLM service (default, constitution-compliant)
+            try:
+                from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+                
+                # Set random seed
+                torch.manual_seed(seed)
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed_all(seed)
+                
                 try:
-                    self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-                    self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
-                    self.model.to(self.device)
-                    self.model.eval()
-                    
-                    # Create text generation pipeline
-                    self.generator = pipeline(
-                        "text-generation",
-                        model=self.model,
-                        tokenizer=self.tokenizer,
-                        device=0 if self.device == "cuda" else -1
-                    )
-                    
-                    logger.debug(
-                        "rag_generator_initialized",
-                        model_name=self.model_name,
-                        device=self.device
-                    )
+                    # Only try to load if a specific model is requested
+                    if model_name and model_name != "gpt2":
+                        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                        self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
+                        self.model.to(self.device)
+                        self.model.eval()
+                        
+                        # Create text generation pipeline
+                        self.generator = pipeline(
+                            "text-generation",
+                            model=self.model,
+                            tokenizer=self.tokenizer,
+                            device=0 if self.device == "cuda" else -1
+                        )
+                        
+                        logger.debug(
+                            "rag_generator_local_initialized",
+                            model_name=self.model_name,
+                            device=self.device
+                        )
+                    else:
+                        # Default: use template-based generation (faster, no model loading)
+                        self.generator = None
+                        logger.debug("rag_generator_using_template", reason="No specific model requested")
                 except Exception as e:
                     logger.debug(
                         "model_loading_failed_fallback",
@@ -67,17 +98,9 @@ class RAGGenerator:
                         error=str(e)
                     )
                     self.generator = None
-            else:
-                # Default: use template-based generation (faster, no model loading)
+            except ImportError:
+                logger.debug("transformers_not_available", fallback="template")
                 self.generator = None
-                logger.debug("rag_generator_using_template", reason="No specific model requested")
-        except Exception as e:
-            logger.debug(
-                "rag_generator_init_error",
-                error=str(e)
-            )
-            # Fallback to template-based generation
-            self.generator = None
     
     def generate(
         self,
@@ -112,6 +135,18 @@ Question: {query}
 
 Answer:"""
         
+        # Use remote service if available
+        if self._remote_service:
+            try:
+                answer = self._remote_service.generate(prompt, max_length=max_length)
+                logger.info("answer_generated_remote", query=query[:50], answer_length=len(answer))
+                return answer
+            except Exception as e:
+                logger.error("remote_generation_failed", error=str(e), fallback="template")
+                # Fallback to template
+                return self._template_generate(query, retrieved_context)
+        
+        # Use local generator if available
         if self.generator:
             # Use LLM generation
             try:

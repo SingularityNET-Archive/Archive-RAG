@@ -39,7 +39,8 @@ Verify compliance with Archive-RAG Constitution principles:
 - **IV. Test-First Governance**: Benchmark suite, retrieval accuracy, citation validity, factuality checks included?
 - **V. Auditability & Transparency**: Immutable logs, audit records, traceable topic/entity extraction implemented?
 - **Additional Constraints**: 
-  - Python-only? Local embeddings + FAISS? No external API dependency for core?
+  - Python-only? Local embeddings + FAISS (default), or remote processing (opt-in)?
+  - Remote processing configured? If yes, fallback to local implemented?
   - SHA-256 hashing for tamper detection? PII redaction?
   - Bounded retrieval latency? Safe degradation? Explainability?
 
