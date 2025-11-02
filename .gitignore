@@ -85,3 +85,6 @@ dmypy.json
 # Type stubs
 *.pyi
 
+.env.env.bak
+.env.bak
+*.env.bak
