@@ -10,6 +10,7 @@ from .audit_view import audit_view_command
 from .topic_model import topic_model_command
 from .extract_entities import extract_entities_command
 from .evaluate import evaluate_command
+from .compliance import check_compliance_command
 
 app = typer.Typer(
     name="archive-rag",
@@ -206,6 +207,24 @@ def audit_view(
         date_to=date_to,
         output_format=output_format,
         export=export
+    )
+
+
+@app.command()
+def check_compliance(
+    static: bool = typer.Option(True, "--static/--no-static", help="Run static analysis checks"),
+    runtime: bool = typer.Option(False, "--runtime/--no-runtime", help="Run runtime checks"),
+    tests: bool = typer.Option(True, "--tests/--no-tests", help="Run compliance tests"),
+    output_format: str = typer.Option("text", "--output-format", help="Output format: json, text, or markdown"),
+    report_file: Optional[Path] = typer.Option(None, "--report-file", help="Write report to file")
+):
+    """Check constitution compliance for entity data model implementation."""
+    check_compliance_command(
+        static=static,
+        runtime=runtime,
+        tests=tests,
+        output_format=output_format,
+        report_file=report_file
     )
 
 

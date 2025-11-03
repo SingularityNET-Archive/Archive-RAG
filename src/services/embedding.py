@@ -7,8 +7,23 @@ from sentence_transformers import SentenceTransformer
 from ..lib.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_SEED
 from ..lib.remote_config import get_embedding_remote_config
 from ..lib.logging import get_logger
+from ..lib.compliance import ConstitutionViolation
 
 logger = get_logger(__name__)
+
+# Global compliance checker instance
+_compliance_checker = None
+
+
+def _get_compliance_checker():
+    """Get or create compliance checker instance."""
+    global _compliance_checker
+    if _compliance_checker is None:
+        from ..services.compliance_checker import ComplianceChecker
+        _compliance_checker = ComplianceChecker()
+        # Enable monitoring by default for compliance checking
+        _compliance_checker.enable_monitoring()
+    return _compliance_checker
 
 
 class EmbeddingService:
@@ -75,10 +90,23 @@ class EmbeddingService:
         
         Raises:
             RuntimeError: If remote embedding fails (no fallback to local)
+            ConstitutionViolation: If compliance violation detected
         """
+        # Check compliance before embedding
+        checker = _get_compliance_checker()
+        violations = checker.check_embedding_operations()
+        if violations:
+            # Fail-fast on first violation
+            raise violations[0]
+        
         if self._remote_service:
             try:
-                return self._remote_service.embed_text(text)
+                result = self._remote_service.embed_text(text)
+                # Check compliance after remote embedding
+                violations = checker.check_embedding_operations()
+                if violations:
+                    raise violations[0]
+                return result
             except Exception as e:
                 logger.error(
                     "remote_embedding_failed",
@@ -98,6 +126,12 @@ class EmbeddingService:
             raise RuntimeError("Local embedding model not initialized")
         
         embedding = self.model.encode(text, convert_to_numpy=True)
+        
+        # Check compliance after embedding
+        violations = checker.check_embedding_operations()
+        if violations:
+            raise violations[0]
+        
         return embedding
     
     def embed_texts(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
@@ -113,10 +147,23 @@ class EmbeddingService:
         
         Raises:
             RuntimeError: If remote embedding fails (no fallback to local)
+            ConstitutionViolation: If compliance violation detected
         """
+        # Check compliance before embedding
+        checker = _get_compliance_checker()
+        violations = checker.check_embedding_operations()
+        if violations:
+            # Fail-fast on first violation
+            raise violations[0]
+        
         if self._remote_service:
             try:
-                return self._remote_service.embed_texts(texts, batch_size=batch_size)
+                result = self._remote_service.embed_texts(texts, batch_size=batch_size)
+                # Check compliance after remote embedding
+                violations = checker.check_embedding_operations()
+                if violations:
+                    raise violations[0]
+                return result
             except Exception as e:
                 logger.error(
                     "remote_embedding_failed",
@@ -142,6 +189,12 @@ class EmbeddingService:
             convert_to_numpy=True,
             show_progress_bar=False
         )
+        
+        # Check compliance after embedding
+        violations = checker.check_embedding_operations()
+        if violations:
+            raise violations[0]
+        
         return embeddings
     
     def get_embedding_dimension(self) -> int:

@@ -6,8 +6,23 @@ import torch
 from ..lib.config import DEFAULT_SEED
 from ..lib.remote_config import get_llm_remote_config
 from ..lib.logging import get_logger
+from ..lib.compliance import ConstitutionViolation
 
 logger = get_logger(__name__)
+
+# Global compliance checker instance
+_compliance_checker = None
+
+
+def _get_compliance_checker():
+    """Get or create compliance checker instance."""
+    global _compliance_checker
+    if _compliance_checker is None:
+        from ..services.compliance_checker import ComplianceChecker
+        _compliance_checker = ComplianceChecker()
+        # Enable monitoring by default for compliance checking
+        _compliance_checker.enable_monitoring()
+    return _compliance_checker
 
 
 class RAGGenerator:
@@ -115,18 +130,28 @@ class RAGGenerator:
             query: User query text
             retrieved_context: List of retrieved chunks with metadata
             max_length: Maximum length of generated text
-            
+        
         Returns:
             Generated answer text
+            
+        Raises:
+            ConstitutionViolation: If compliance violation detected
         """
-        # Assemble context from retrieved chunks
-        context_text = "\n\n".join([
-            f"[Meeting: {chunk.get('meeting_id', 'unknown')}]\n{chunk.get('text', '')}"
-            for chunk in retrieved_context
-        ])
-        
-        # Create prompt
-        prompt = f"""Based on the following meeting records, answer the question.
+        # Check compliance before generation
+        checker = _get_compliance_checker()
+        violations = checker.check_llm_operations()
+        if violations:
+            # Fail-fast on first violation
+            raise violations[0]
+        try:
+            # Assemble context from retrieved chunks
+            context_text = "\n\n".join([
+                f"[Meeting: {chunk.get('meeting_id', 'unknown')}]\n{chunk.get('text', '')}"
+                for chunk in retrieved_context
+            ])
+            
+            # Create prompt
+            prompt = f"""Based on the following meeting records, answer the question.
 
 Meeting Records:
 {context_text}
@@ -134,53 +159,65 @@ Meeting Records:
 Question: {query}
 
 Answer:"""
-        
-        # Use remote service if available
-        if self._remote_service:
-            try:
-                answer = self._remote_service.generate(prompt, max_length=max_length)
-                logger.info("answer_generated_remote", query=query[:50], answer_length=len(answer))
-                return answer
-            except Exception as e:
-                error_str = str(e)
-                # Check for quota errors and log as warning
-                if "429" in error_str or "insufficient_quota" in error_str.lower() or "quota" in error_str.lower():
-                    logger.warning(
-                        "remote_generation_quota_exceeded",
-                        error=error_str,
-                        fallback="template",
-                        suggestion="OpenAI quota exceeded. Using template-based generation."
+            
+            # Use remote service if available
+            if self._remote_service:
+                try:
+                    answer = self._remote_service.generate(prompt, max_length=max_length)
+                    logger.info("answer_generated_remote", query=query[:50], answer_length=len(answer))
+                    # Check compliance after remote generation
+                    violations = checker.check_llm_operations()
+                    if violations:
+                        raise violations[0]
+                    return answer
+                except Exception as e:
+                    error_str = str(e)
+                    # Check for quota errors and log as warning
+                    if "429" in error_str or "insufficient_quota" in error_str.lower() or "quota" in error_str.lower():
+                        logger.warning(
+                            "remote_generation_quota_exceeded",
+                            error=error_str,
+                            fallback="template",
+                            suggestion="OpenAI quota exceeded. Using template-based generation."
+                        )
+                    else:
+                        logger.error("remote_generation_failed", error=error_str, fallback="template")
+                    # Fallback to template
+                    answer = self._template_generate(query, retrieved_context)
+            elif self.generator:
+                # Use local LLM generation
+                try:
+                    outputs = self.generator(
+                        prompt,
+                        max_length=max_length,
+                        num_return_sequences=1,
+                        temperature=0.7,
+                        do_sample=True,
+                        truncation=True,
+                        pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, 'eos_token_id') else None
                     )
-                else:
-                    logger.error("remote_generation_failed", error=error_str, fallback="template")
-                # Fallback to template
-                return self._template_generate(query, retrieved_context)
-        
-        # Use local generator if available
-        if self.generator:
-            # Use LLM generation
-            try:
-                outputs = self.generator(
-                    prompt,
-                    max_length=max_length,
-                    num_return_sequences=1,
-                    temperature=0.7,
-                    do_sample=True,
-                    truncation=True,
-                    pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, 'eos_token_id') else None
-                )
-                answer = outputs[0]["generated_text"].split("Answer:")[-1].strip()
-            except Exception as e:
-                logger.debug("generation_failed_fallback", error=str(e))
-                # Fallback to template
+                    answer = outputs[0]["generated_text"].split("Answer:")[-1].strip()
+                except Exception as e:
+                    logger.debug("generation_failed_fallback", error=str(e))
+                    # Fallback to template
+                    answer = self._template_generate(query, retrieved_context)
+            else:
+                # Use template-based generation (default for small datasets)
                 answer = self._template_generate(query, retrieved_context)
-        else:
-            # Use template-based generation (default for small datasets)
-            answer = self._template_generate(query, retrieved_context)
-        
-        logger.info("answer_generated", query=query[:50], answer_length=len(answer))
-        
-        return answer
+            
+            # Check compliance after generation
+            violations = checker.check_llm_operations()
+            if violations:
+                raise violations[0]
+            
+            logger.info("answer_generated", query=query[:50], answer_length=len(answer))
+            
+            return answer
+        except ConstitutionViolation:
+            raise
+        except Exception as e:
+            logger.error("generation_failed", query=query[:50], error=str(e))
+            raise
     
     def _template_generate(
         self,

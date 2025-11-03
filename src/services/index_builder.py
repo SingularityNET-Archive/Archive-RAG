@@ -13,8 +13,23 @@ from ..services.embedding import EmbeddingService
 from ..lib.config import get_index_path, get_index_metadata_path
 from ..lib.hashing import compute_bytes_hash, compute_string_hash
 from ..lib.logging import get_logger
+from ..lib.compliance import ConstitutionViolation
 
 logger = get_logger(__name__)
+
+# Global compliance checker instance
+_compliance_checker = None
+
+
+def _get_compliance_checker():
+    """Get or create compliance checker instance."""
+    global _compliance_checker
+    if _compliance_checker is None:
+        from ..services.compliance_checker import ComplianceChecker
+        _compliance_checker = ComplianceChecker()
+        # Enable monitoring by default for compliance checking
+        _compliance_checker.enable_monitoring()
+    return _compliance_checker
 
 
 def build_faiss_index(
@@ -95,6 +110,17 @@ def build_faiss_index(
     else:
         actual_index_path = get_index_path(index_name)
     
+    # Check compliance for FAISS operations (T044 - US3)
+    checker = _get_compliance_checker()
+    violations = checker.check_faiss_operations()
+    if violations:
+        raise violations[0]
+    
+    # Verify FAISS index is stored locally (T043 - US3)
+    local_violations = checker.verify_faiss_index_local_only(str(actual_index_path))
+    if local_violations:
+        raise local_violations[0]
+    
     # Create EmbeddingIndex metadata
     embedding_index = EmbeddingIndex(
         index_id=index_name,
@@ -131,6 +157,9 @@ def save_index(
         index: FAISS index object
         embedding_index: EmbeddingIndex metadata
         index_name: Name or full path for the index (if contains '/', treated as full path)
+        
+    Raises:
+        ConstitutionViolation: If compliance violation detected
     """
     from pathlib import Path
     
@@ -145,6 +174,17 @@ def save_index(
         # Just index name - use get_index_path helper
         index_path = get_index_path(index_name)
         metadata_path = get_index_metadata_path(index_name)
+    
+    # Check compliance for FAISS operations (T044 - US3)
+    checker = _get_compliance_checker()
+    violations = checker.check_faiss_operations()
+    if violations:
+        raise violations[0]
+    
+    # Verify FAISS index is stored locally (T043 - US3)
+    local_violations = checker.verify_faiss_index_local_only(str(index_path))
+    if local_violations:
+        raise local_violations[0]
     
     # Ensure parent directory exists
     index_path.parent.mkdir(parents=True, exist_ok=True)

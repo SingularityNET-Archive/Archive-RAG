@@ -10,8 +10,23 @@ from ..models.embedding_index import EmbeddingIndex
 from ..services.embedding import EmbeddingService
 from ..lib.config import get_index_path, get_index_metadata_path
 from ..lib.logging import get_logger
+from ..lib.compliance import ConstitutionViolation
 
 logger = get_logger(__name__)
+
+# Global compliance checker instance
+_compliance_checker = None
+
+
+def _get_compliance_checker():
+    """Get or create compliance checker instance."""
+    global _compliance_checker
+    if _compliance_checker is None:
+        from ..services.compliance_checker import ComplianceChecker
+        _compliance_checker = ComplianceChecker()
+        # Enable monitoring by default for compliance checking
+        _compliance_checker.enable_monitoring()
+    return _compliance_checker
 
 
 def load_index(index_name: str) -> tuple[faiss.Index, EmbeddingIndex]:
@@ -26,6 +41,7 @@ def load_index(index_name: str) -> tuple[faiss.Index, EmbeddingIndex]:
         
     Raises:
         FileNotFoundError: If index or metadata file not found
+        ConstitutionViolation: If compliance violation detected
     """
     # Handle full paths vs just index names
     if '/' in index_name or '\\' in index_name:
@@ -38,6 +54,17 @@ def load_index(index_name: str) -> tuple[faiss.Index, EmbeddingIndex]:
         # Just index name - use get_index_path helper
         index_path = get_index_path(index_name)
         metadata_path = get_index_metadata_path(index_name)
+    
+    # Check compliance for FAISS operations (T045 - US3)
+    checker = _get_compliance_checker()
+    violations = checker.check_faiss_operations()
+    if violations:
+        raise violations[0]
+    
+    # Verify FAISS index is stored locally (T043 - US3)
+    local_violations = checker.verify_faiss_index_local_only(str(index_path))
+    if local_violations:
+        raise local_violations[0]
     
     if not index_path.exists():
         raise FileNotFoundError(f"Index file not found: {index_path}")
