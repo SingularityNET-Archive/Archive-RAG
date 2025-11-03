@@ -278,7 +278,7 @@ class QueryService:
                 citations.append(Citation(
                     meeting_id="entity-storage",
                     date=datetime.utcnow().strftime("%Y-%m-%d"),
-                    speaker="System",
+                    workgroup_name=None,
                     excerpt=f"Counted {count} meetings by scanning JSON files in {source}. Method: {method}."
                 ))
                 
@@ -293,7 +293,7 @@ class QueryService:
                 citations.append(Citation(
                     meeting_id="quantitative-analysis",
                     date=datetime.utcnow().strftime("%Y-%m-%d"),
-                    speaker="System",
+                    workgroup_name=None,
                     excerpt=f"Quantitative analysis performed. Method: {method}. Source: {source}."
                 ))
                 
@@ -304,7 +304,7 @@ class QueryService:
                             citations.append(Citation(
                                 meeting_id=cit.get("type", "quantitative"),
                                 date=datetime.utcnow().strftime("%Y-%m-%d"),
-                                speaker="System",
+                                workgroup_name=None,
                                 excerpt=cit.get("description", f"Method: {cit.get('method', method)}")
                             ))
             else:

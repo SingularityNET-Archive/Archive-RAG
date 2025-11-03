@@ -15,11 +15,11 @@ class RetrievedChunk(BaseModel):
 
 
 class Citation(BaseModel):
-    """Citation in format [meeting_id | date | speaker]."""
+    """Citation in format [meeting_id | date | workgroup_name]."""
     
     meeting_id: str = Field(..., description="Meeting identifier")
     date: str = Field(..., description="Meeting date")
-    speaker: Optional[str] = Field(None, description="Speaker name")
+    workgroup_name: Optional[str] = Field(None, description="Workgroup name")
     excerpt: str = Field(..., description="Cited text excerpt")
 
 
@@ -33,7 +33,7 @@ class RAGQuery(BaseModel):
         timestamp: Query execution timestamp
         retrieved_chunks: Retrieved document chunks with metadata
         output: Generated answer text
-        citations: Verifiable citations in format [meeting_id | date | speaker]
+        citations: Verifiable citations in format [meeting_id | date | workgroup_name]
         model_version: Version of LLM used for generation
         embedding_version: Version of embedding model used
         user_id: SSO user identifier (optional)
@@ -82,7 +82,7 @@ class RAGQuery(BaseModel):
                     {
                         "meeting_id": "meeting_001",
                         "date": "2024-03-15",
-                        "speaker": "Alice",
+                        "workgroup_name": "Budget Committee",
                         "excerpt": "The budget committee decided..."
                     }
                 ],

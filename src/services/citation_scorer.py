@@ -33,7 +33,7 @@ def score_citation_accuracy(
             if validate_citation_format(format_citation(
                 citation.meeting_id,
                 citation.date,
-                citation.speaker
+                citation.workgroup_name
             ))
         )
         return valid_count / len(actual_citations) if actual_citations else 0.0
@@ -44,13 +44,13 @@ def score_citation_accuracy(
     for expected in expected_citations:
         expected_meeting_id = expected.get("meeting_id", "")
         expected_date = expected.get("date", "")
-        expected_speaker = expected.get("speaker")
+        expected_workgroup_name = expected.get("workgroup_name")
         
         # Find matching actual citation
         for actual in actual_citations:
             if (actual.meeting_id == expected_meeting_id and
                 actual.date == expected_date and
-                (not expected_speaker or actual.speaker == expected_speaker)):
+                (not expected_workgroup_name or actual.workgroup_name == expected_workgroup_name)):
                 matched_count += 1
                 break
     

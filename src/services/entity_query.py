@@ -250,8 +250,9 @@ class EntityQueryService:
         Raises:
             ValueError: If entity loading fails
         """
-        import requests
         from urllib.parse import urlparse
+        from urllib.request import urlopen, Request
+        from urllib.error import URLError, HTTPError
         
         logger.info("query_documents_by_meeting_with_validation_start", meeting_id=str(meeting_id))
         
@@ -270,17 +271,19 @@ class EntityQueryService:
                         validated_documents.append(document)
                         continue
                     
-                    # Attempt HEAD request to validate accessibility
+                    # Attempt HEAD request to validate accessibility using standard library
                     try:
-                        response = requests.head(str(document.link), timeout=5, allow_redirects=True)
-                        is_accessible = response.status_code < 400
-                        if not is_accessible:
-                            logger.warning("query_documents_link_inaccessible", document_id=str(document.id), link=str(document.link), status_code=response.status_code)
-                        # Still include document even if link is inaccessible (FR-012)
-                        validated_documents.append(document)
-                    except (requests.RequestException, Exception) as e:
+                        req = Request(str(document.link), method='HEAD')
+                        with urlopen(req, timeout=5) as response:
+                            is_accessible = response.status < 400
+                            if not is_accessible:
+                                logger.warning("query_documents_link_inaccessible", document_id=str(document.id), link=str(document.link), status_code=response.status)
+                            # Still include document even if link is inaccessible (FR-012)
+                            validated_documents.append(document)
+                    except (URLError, HTTPError, Exception) as e:
                         # Link validation failed but don't block retrieval
-                        logger.warning("query_documents_link_validation_failed", document_id=str(document.id), link=str(document.link), error=str(e))
+                        status_code = getattr(e, 'code', None) if isinstance(e, HTTPError) else None
+                        logger.warning("query_documents_link_validation_failed", document_id=str(document.id), link=str(document.link), error=str(e), status_code=status_code)
                         validated_documents.append(document)
                         
                 except Exception as e:

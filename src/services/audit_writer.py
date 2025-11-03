@@ -54,7 +54,7 @@ class AuditWriter:
                 {
                     "meeting_id": citation.meeting_id,
                     "date": citation.date,
-                    "speaker": citation.speaker,
+                    "workgroup_name": citation.workgroup_name,
                     "excerpt": citation.excerpt
                 }
                 for citation in rag_query.citations

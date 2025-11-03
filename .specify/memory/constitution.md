@@ -38,7 +38,7 @@ The system must ground all outputs strictly in archived meeting data.
 
 Every generated statement shall be supported by verifiable citation.
 
-- Required format: [meeting_id | date | speaker]
+- Required format: [meeting_id | date | workgroup_name]
 - Each answer includes retrieved text + provenance metadata
 - Citations are non-optional, non-negotiable
 
@@ -93,7 +93,7 @@ All actions must be visible and reviewable.
 - System MUST extract structured entities from meeting records (meetings, workgroups, people, documents, agenda items, decision items, action items)
 - Entity storage MUST be local-first: JSON files in `entities/` directory structure (no external database dependencies)
 - Entity relationships MUST maintain referential integrity (foreign key validation, cascade delete behaviors)
-- Entity extraction MUST preserve traceability to source meeting records (meeting_id, date, speaker relationships)
+- Entity extraction MUST preserve traceability to source meeting records (meeting_id, date, workgroup relationships)
 - System MUST support dual querying: structured entity queries (quantitative counts, relationship navigation) AND vector similarity search (qualitative RAG queries)
 - Entity extraction MUST be deterministic: same meeting record produces identical entity structure and relationships
 - Entity storage operations MUST be atomic (temporary file + rename pattern for writes, backup/restore for deletes)

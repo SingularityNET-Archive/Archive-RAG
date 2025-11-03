@@ -80,7 +80,9 @@ def chunk_transcript(
         "date": meeting_record.date,
         "participants": meeting_record.participants,
         "decisions": meeting_record.decisions,
-        "tags": meeting_record.tags
+        "tags": meeting_record.tags,
+        "workgroup": getattr(meeting_record, "workgroup", None),
+        "workgroup_id": getattr(meeting_record, "workgroup_id", None)
     }
     
     # Chunk transcript with overlap

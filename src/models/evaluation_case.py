@@ -13,7 +13,7 @@ class EvaluationCase(BaseModel):
         case_id: Unique evaluation case identifier
         prompt: Test query prompt
         ground_truth: Expected answer content
-        expected_citations: Expected citations in format [meeting_id | date | speaker]
+        expected_citations: Expected citations in format [meeting_id | date | workgroup_name]
         evaluation_metrics: Scoring results
         run_timestamp: Evaluation run timestamp
         model_version: LLM version used for evaluation
@@ -25,7 +25,7 @@ class EvaluationCase(BaseModel):
     ground_truth: str = Field(..., description="Expected answer content")
     expected_citations: List[Dict[str, Any]] = Field(
         ...,
-        description="Expected citations in format [meeting_id | date | speaker]"
+        description="Expected citations in format [meeting_id | date | workgroup_name]"
     )
     evaluation_metrics: Optional[Dict[str, Any]] = Field(
         None,
@@ -55,7 +55,7 @@ class EvaluationCase(BaseModel):
                     {
                         "meeting_id": "meeting_001",
                         "date": "2024-03-15",
-                        "speaker": "Alice",
+                        "workgroup_name": "Budget Committee",
                         "excerpt": "budget allocation"
                     }
                 ],
