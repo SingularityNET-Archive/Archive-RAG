@@ -1,9 +1,15 @@
 """Document chunking service for transcript splitting."""
 
 from typing import List, Dict, Any
+from uuid import UUID
 from ..models.meeting_record import MeetingRecord
-from ..lib.config import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
+from ..lib.config import (
+    DEFAULT_CHUNK_SIZE, 
+    DEFAULT_CHUNK_OVERLAP,
+    ENTITIES_DECISION_ITEMS_DIR
+)
 from ..lib.logging import get_logger
+from ..services.entity_query import EntityQueryService
 
 logger = get_logger(__name__)
 
@@ -125,4 +131,54 @@ def chunk_transcript(
         pass
     
     return chunks
+
+
+def extract_decision_text_for_rag(meeting_id: UUID) -> str:
+    """
+    Extract transcript content from DecisionItem entities for RAG embedding.
+    
+    This function reads decision text from DecisionItem entity JSON files
+    instead of MeetingRecord.transcript, as per FR-020.
+    
+    Args:
+        meeting_id: UUID of the meeting to extract decision text from
+        
+    Returns:
+        Combined decision text string for RAG embedding
+        
+    Raises:
+        ValueError: If meeting_id is invalid
+    """
+    logger.info("extracting_decision_text_for_rag_start", meeting_id=str(meeting_id))
+    
+    try:
+        # Get all decision items for this meeting
+        query_service = EntityQueryService()
+        decision_items = query_service.get_decision_items_by_meeting(meeting_id)
+        
+        # Extract decision text from each decision item
+        decision_texts = []
+        for decision_item in decision_items:
+            if decision_item.decision and decision_item.decision.strip():
+                decision_texts.append(decision_item.decision.strip())
+        
+        # Combine all decision text with spaces
+        combined_text = " ".join(decision_texts)
+        
+        logger.info(
+            "extracting_decision_text_for_rag_success",
+            meeting_id=str(meeting_id),
+            decision_count=len(decision_items),
+            text_length=len(combined_text)
+        )
+        
+        return combined_text
+        
+    except Exception as e:
+        logger.error(
+            "extracting_decision_text_for_rag_failed",
+            meeting_id=str(meeting_id),
+            error=str(e)
+        )
+        raise
 

@@ -11,6 +11,7 @@ from src.models.person import Person
 from src.models.agenda_item import AgendaItem, AgendaItemStatus
 from src.models.action_item import ActionItem, ActionItemStatus
 from src.models.document import Document
+from src.models.decision_item import DecisionItem, DecisionEffect
 
 
 class TestWorkgroupModel:
@@ -420,4 +421,99 @@ class TestDocumentModel:
             link="https://example.com/custom.pdf"
         )
         assert document.id == custom_id
+
+
+class TestDecisionItemModel:
+    """Unit tests for DecisionItem model validation."""
+    
+    @pytest.fixture
+    def agenda_item_id(self):
+        """Fixture for agenda item UUID."""
+        return uuid4()
+    
+    def test_decision_item_creation_valid(self, agenda_item_id):
+        """Test creating a valid decision item."""
+        decision_item = DecisionItem(
+            agenda_item_id=agenda_item_id,
+            decision="Approved budget increase of 10%"
+        )
+        assert decision_item.agenda_item_id == agenda_item_id
+        assert decision_item.decision == "Approved budget increase of 10%"
+        assert isinstance(decision_item.id, UUID)
+        assert decision_item.created_at is not None
+        assert decision_item.updated_at is not None
+    
+    def test_decision_item_agenda_item_id_required(self):
+        """Test agenda_item_id is required."""
+        with pytest.raises(ValidationError) as exc_info:
+            DecisionItem(decision="Test decision")
+        assert "agenda_item_id" in str(exc_info.value)
+    
+    def test_decision_item_decision_required(self, agenda_item_id):
+        """Test decision text is required."""
+        with pytest.raises(ValidationError) as exc_info:
+            DecisionItem(agenda_item_id=agenda_item_id)
+        assert "decision" in str(exc_info.value)
+    
+    def test_decision_item_decision_not_empty(self, agenda_item_id):
+        """Test decision text cannot be empty."""
+        with pytest.raises(ValidationError):
+            DecisionItem(agenda_item_id=agenda_item_id, decision="")
+        
+        with pytest.raises(ValidationError):
+            DecisionItem(agenda_item_id=agenda_item_id, decision="   ")
+    
+    def test_decision_item_with_rationale(self, agenda_item_id):
+        """Test decision item with rationale."""
+        decision_item = DecisionItem(
+            agenda_item_id=agenda_item_id,
+            decision="Approved new feature",
+            rationale="Based on user feedback and technical feasibility"
+        )
+        assert decision_item.rationale == "Based on user feedback and technical feasibility"
+    
+    def test_decision_item_with_effect(self, agenda_item_id):
+        """Test decision item with effect scope."""
+        decision_item = DecisionItem(
+            agenda_item_id=agenda_item_id,
+            decision="Approved budget change",
+            effect=DecisionEffect.MAY_AFFECT_OTHER_PEOPLE
+        )
+        assert decision_item.effect == DecisionEffect.MAY_AFFECT_OTHER_PEOPLE
+    
+    def test_decision_item_effect_enum(self, agenda_item_id):
+        """Test decision effect enum values."""
+        # Test both enum values
+        decision1 = DecisionItem(
+            agenda_item_id=agenda_item_id,
+            decision="Decision 1",
+            effect=DecisionEffect.AFFECTS_ONLY_THIS_WORKGROUP
+        )
+        assert decision1.effect == DecisionEffect.AFFECTS_ONLY_THIS_WORKGROUP
+        
+        decision2 = DecisionItem(
+            agenda_item_id=agenda_item_id,
+            decision="Decision 2",
+            effect=DecisionEffect.MAY_AFFECT_OTHER_PEOPLE
+        )
+        assert decision2.effect == DecisionEffect.MAY_AFFECT_OTHER_PEOPLE
+    
+    def test_decision_item_optional_fields(self, agenda_item_id):
+        """Test decision item with optional fields."""
+        decision_item = DecisionItem(
+            agenda_item_id=agenda_item_id,
+            decision="Simple decision"
+        )
+        assert decision_item.rationale is None
+        assert decision_item.effect is None
+    
+    def test_decision_item_with_custom_id(self, agenda_item_id):
+        """Test creating decision item with custom UUID."""
+        custom_id = uuid4()
+        decision_item = DecisionItem(
+            id=custom_id,
+            agenda_item_id=agenda_item_id,
+            decision="Custom decision"
+        )
+        assert decision_item.id == custom_id
 

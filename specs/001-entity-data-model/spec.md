@@ -119,8 +119,8 @@ A user needs to find meetings by topics covered or emotional tone to discover re
 
 - **FR-001**: System MUST support storing workgroups with unique identifiers and names
 - **FR-002**: System MUST support storing meetings with associations to workgroups, hosts, and documenters
-- **FR-024**: System MUST validate that meetings have at least one participant - meetings with empty participant lists are invalid
 - **FR-003**: System MUST support storing person entities with display names and optional aliases
+- **FR-024**: System MUST validate that meetings have at least one participant - meetings with empty participant lists are invalid (Note: Basic validation for new meetings is implemented in User Story 1; full many-to-many relationship validation with MeetingPerson junction table is implemented in Phase 8)
 - **FR-004**: System MUST support linking documents to meetings with titles and URLs (links validated on access, not during ingestion)
 - **FR-005**: System MUST support storing agenda items with status indicators (agenda items can exist without action items or decision items)
 - **FR-006**: System MUST support storing action items with assignees, due dates, and status
@@ -128,8 +128,8 @@ A user needs to find meetings by topics covered or emotional tone to discover re
 - **FR-008**: System MUST support tagging meetings with topics and emotions
 - **FR-009**: System MUST support querying meetings by workgroup identifier
 - **FR-010**: System MUST support querying action items by assignee
-- **FR-011**: System MUST support querying all meetings attended by a specific person via many-to-many relationship
-- **FR-023**: System MUST implement many-to-many relationship between meetings and people using junction table/entity to enable bidirectional queries
+- **FR-011**: System MUST support querying all meetings attended by a specific person via many-to-many relationship (Note: Implementation of many-to-many relationship infrastructure is in Phase 8; basic query capability enabled after Phase 8 completion)
+- **FR-023**: System MUST implement many-to-many relationship between meetings and people using junction table/entity to enable bidirectional queries (Note: This is implemented in Phase 8: Many-to-Many Relationship & Cascade Deletes, not as part of User Story 1)
 - **FR-012**: System MUST support retrieving all documents linked to a meeting (broken/inaccessible links detected during retrieval but do not block retrieval operation)
 - **FR-013**: System MUST support retrieving all agenda items for a meeting
 - **FR-014**: System MUST support retrieving all action items for an agenda item
@@ -171,8 +171,8 @@ A user needs to find meetings by topics covered or emotional tone to discover re
 - **SC-005**: Users can query meetings by topic tags with 95% precision (95% of returned meetings contain the queried topic) AND 95% recall (95% of meetings with the topic are returned)
 - **SC-006**: System supports storing and retrieving meetings with full entity relationships without data loss
 - **SC-007**: Users can navigate from a meeting to all related entities (people, documents, agenda items) in under 2 seconds per relationship type
-- **SC-008**: RAG system can extract and embed transcript content from decision items with 100% coverage of decision text
-- **SC-009**: System handles legacy meetings with no participants or empty transcripts gracefully during migration (allows reading/migrating legacy data without errors, but new meetings must have at least one participant per FR-024)
+- **SC-008**: RAG system can extract and embed transcript content from decision items with 100% coverage of decision text (Validation: All decision text fields from DecisionItem entities must be extracted and available for RAG embedding; test coverage verifies no decision text is missed)
+- **SC-009**: System handles legacy meetings with no participants or empty transcripts gracefully during migration (allows reading/migrating legacy data without errors, but new meetings must have at least one participant per FR-024). "Gracefully" means: (1) legacy meetings without participants are migrated with a warning flag, (2) no migration errors are raised for missing participants in legacy data, (3) new meetings (post-migration) must have at least one participant or validation fails
 - **SC-010**: Migration from existing flat data structure to relational model preserves 100% of meeting content (transcript text), entity relationships (foreign keys), metadata (dates, types, flags), and external references (document links)
 
 ## Assumptions

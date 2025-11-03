@@ -10,6 +10,7 @@ from src.models.person import Person
 from src.models.agenda_item import AgendaItem
 from src.models.action_item import ActionItem, ActionItemStatus
 from src.models.document import Document
+from src.models.decision_item import DecisionItem, DecisionEffect
 from src.services.entity_storage import (
     save_workgroup,
     save_meeting,
@@ -17,6 +18,7 @@ from src.services.entity_storage import (
     save_agenda_item,
     save_action_item,
     save_document,
+    save_decision_item,
     load_entity,
     init_entity_storage_directories
 )
@@ -28,6 +30,7 @@ from src.lib.config import (
     ENTITIES_DOCUMENTS_DIR,
     ENTITIES_AGENDA_ITEMS_DIR,
     ENTITIES_ACTION_ITEMS_DIR,
+    ENTITIES_DECISION_ITEMS_DIR,
     ENTITIES_INDEX_DIR
 )
 
@@ -47,6 +50,7 @@ class TestEntityRelationships:
         lib.config.ENTITIES_DOCUMENTS_DIR = lib.config.ENTITIES_DIR / "documents"
         lib.config.ENTITIES_AGENDA_ITEMS_DIR = lib.config.ENTITIES_DIR / "agenda_items"
         lib.config.ENTITIES_ACTION_ITEMS_DIR = lib.config.ENTITIES_DIR / "action_items"
+        lib.config.ENTITIES_DECISION_ITEMS_DIR = lib.config.ENTITIES_DIR / "decision_items"
         lib.config.ENTITIES_INDEX_DIR = lib.config.ENTITIES_DIR / "_index"
         
         # Initialize storage directories
@@ -364,4 +368,190 @@ class TestEntityRelationships:
         m1_ids = {doc.id for doc in docs_m1}
         m2_ids = {doc.id for doc in docs_m2}
         assert m1_ids.isdisjoint(m2_ids)
+    
+    def test_query_decisions_by_agenda_item(self):
+        """Test querying decisions by agenda item - integration test for US4."""
+        # Create workgroup and meeting
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        save_meeting(meeting)
+        
+        # Create agenda items
+        agenda_item1 = AgendaItem(
+            meeting_id=meeting.id,
+            status="completed"
+        )
+        agenda_item2 = AgendaItem(
+            meeting_id=meeting.id,
+            status="completed"
+        )
+        save_agenda_item(agenda_item1)
+        save_agenda_item(agenda_item2)
+        
+        # Create decision items for each agenda item
+        decision1_1 = DecisionItem(
+            agenda_item_id=agenda_item1.id,
+            decision="Approved budget increase of 10%",
+            rationale="Based on increased operational costs",
+            effect=DecisionEffect.MAY_AFFECT_OTHER_PEOPLE
+        )
+        decision1_2 = DecisionItem(
+            agenda_item_id=agenda_item1.id,
+            decision="Postponed feature implementation",
+            rationale="Resource constraints"
+        )
+        decision2_1 = DecisionItem(
+            agenda_item_id=agenda_item2.id,
+            decision="Hired new team member",
+            effect=DecisionEffect.AFFECTS_ONLY_THIS_WORKGROUP
+        )
+        
+        save_decision_item(decision1_1)
+        save_decision_item(decision1_2)
+        save_decision_item(decision2_1)
+        
+        # Query decisions by agenda item
+        query_service = EntityQueryService()
+        decisions_for_agenda1 = query_service.get_decision_items_by_agenda_item(agenda_item1.id)
+        decisions_for_agenda2 = query_service.get_decision_items_by_agenda_item(agenda_item2.id)
+        
+        # Verify correct decisions are returned
+        assert len(decisions_for_agenda1) == 2
+        assert len(decisions_for_agenda2) == 1
+        
+        # Verify decision details
+        decision_ids_agenda1 = {d.id for d in decisions_for_agenda1}
+        assert decision1_1.id in decision_ids_agenda1
+        assert decision1_2.id in decision_ids_agenda1
+        assert decision2_1.id not in decision_ids_agenda1
+        
+        # Verify rationales and effects are preserved
+        decision1_1_loaded = next(d for d in decisions_for_agenda1 if d.id == decision1_1.id)
+        assert decision1_1_loaded.rationale == "Based on increased operational costs"
+        assert decision1_1_loaded.effect == DecisionEffect.MAY_AFFECT_OTHER_PEOPLE
+    
+    def test_query_decisions_by_effect_scope(self):
+        """Test querying decisions by effect scope - integration test for US4."""
+        # Create workgroup, meeting, and agenda item
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        save_meeting(meeting)
+        
+        agenda_item = AgendaItem(
+            meeting_id=meeting.id,
+            status="completed"
+        )
+        save_agenda_item(agenda_item)
+        
+        # Create decisions with different effect scopes
+        decision_affects_others = DecisionItem(
+            agenda_item_id=agenda_item.id,
+            decision="Approved cross-team collaboration",
+            effect=DecisionEffect.MAY_AFFECT_OTHER_PEOPLE
+        )
+        decision_affects_only = DecisionItem(
+            agenda_item_id=agenda_item.id,
+            decision="Internal team structure change",
+            effect=DecisionEffect.AFFECTS_ONLY_THIS_WORKGROUP
+        )
+        decision_no_effect = DecisionItem(
+            agenda_item_id=agenda_item.id,
+            decision="Routine operational decision"
+        )
+        
+        save_decision_item(decision_affects_others)
+        save_decision_item(decision_affects_only)
+        save_decision_item(decision_no_effect)
+        
+        # Query decisions by effect
+        query_service = EntityQueryService()
+        decisions_affecting_others = query_service.get_decision_items_by_effect(
+            DecisionEffect.MAY_AFFECT_OTHER_PEOPLE
+        )
+        decisions_affecting_only = query_service.get_decision_items_by_effect(
+            DecisionEffect.AFFECTS_ONLY_THIS_WORKGROUP
+        )
+        
+        # Verify correct decisions are returned
+        assert len(decisions_affecting_others) >= 1
+        assert len(decisions_affecting_only) >= 1
+        
+        # Verify effect filtering works
+        affecting_others_ids = {d.id for d in decisions_affecting_others}
+        assert decision_affects_others.id in affecting_others_ids
+        assert decision_affects_only.id not in affecting_others_ids
+        assert decision_no_effect.id not in affecting_others_ids
+        
+        affecting_only_ids = {d.id for d in decisions_affecting_only}
+        assert decision_affects_only.id in affecting_only_ids
+        assert decision_affects_others.id not in affecting_only_ids
+    
+    def test_decision_text_extraction_coverage(self):
+        """Test that 100% of decision text is extracted for RAG embedding - SC-008."""
+        # Create workgroup, meeting, and agenda item
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        save_meeting(meeting)
+        
+        agenda_item = AgendaItem(
+            meeting_id=meeting.id,
+            status="completed"
+        )
+        save_agenda_item(agenda_item)
+        
+        # Create multiple decisions with varying text lengths
+        decision_texts = [
+            "Short decision",
+            "This is a longer decision with more details about the approval process",
+            "Decision with rationale: Based on comprehensive analysis, we approve this change",
+            "Another decision with special characters: $100,000 budget & 10% increase"
+        ]
+        
+        decision_items = []
+        for decision_text in decision_texts:
+            decision_item = DecisionItem(
+                agenda_item_id=agenda_item.id,
+                decision=decision_text
+            )
+            save_decision_item(decision_item)
+            decision_items.append(decision_item)
+        
+        # Query all decisions for the agenda item
+        query_service = EntityQueryService()
+        retrieved_decisions = query_service.get_decision_items_by_agenda_item(agenda_item.id)
+        
+        # Verify 100% coverage: all decision text is present
+        assert len(retrieved_decisions) == len(decision_texts)
+        
+        retrieved_texts = {d.decision for d in retrieved_decisions}
+        original_texts = set(decision_texts)
+        
+        # Verify all original decision texts are present in retrieved decisions
+        assert retrieved_texts == original_texts, "Not all decision text was extracted"
+        
+        # Verify decision text is not truncated or modified
+        for original_text in decision_texts:
+            matching_decision = next(
+                d for d in retrieved_decisions if d.decision == original_text
+            )
+            assert matching_decision.decision == original_text
+            assert len(matching_decision.decision) == len(original_text)
 

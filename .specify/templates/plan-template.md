@@ -43,6 +43,8 @@ Verify compliance with Archive-RAG Constitution principles:
   - Remote embeddings allowed? **YES** - Remote embeddings via API endpoints are permitted but optional (local fallback required)
   - Remote LLM inference allowed? **YES** - Remote LLM via API endpoints are permitted but optional (local fallback required)
   - FAISS storage local? **YES** - FAISS vector storage remains local for performance and determinism
+  - Entity storage local? **YES** - Entity storage uses local JSON files (no external database dependencies)
+  - Structured data extraction? **YES** - Entity extraction preserves traceability, maintains referential integrity, supports dual querying (structured + vector search)
   - SHA-256 hashing for tamper detection? PII redaction?
   - Bounded retrieval latency? Safe degradation? Explainability?
 

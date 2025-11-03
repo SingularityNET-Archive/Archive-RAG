@@ -75,6 +75,7 @@
 - [X] T025 [US1] Implement `archive-rag query-workgroup` CLI command in `src/cli/query.py` (new function `query_workgroup_command`)
 - [X] T026 [US1] Add validation for workgroup_id foreign key in `src/lib/validation.py` (validate workgroup exists before saving meeting)
 - [X] T027 [US1] Add logging for query-workgroup operations in `src/services/entity_query.py`
+- [X] T027A [US1] Add basic validation for Meeting participant requirement in `src/lib/validation.py` (FR-024: validate that new meetings have at least one participant - basic check; full many-to-many validation will be in Phase 8)
 
 **Checkpoint**: At this point, User Story 1 should be fully functional. Users can query meetings by workgroup via CLI command, with all meetings correctly associated with their workgroups.
 
@@ -146,21 +147,23 @@
 
 ### Tests for User Story 4
 
-- [ ] T054 [P] [US4] Unit test for DecisionItem model validation in `tests/unit/test_entity_models.py`
-- [ ] T055 [P] [US4] Integration test for query decisions by agenda item in `tests/integration/test_entity_relationships.py`
-- [ ] T056 [P] [US4] Integration test for query decisions by effect scope in `tests/integration/test_entity_relationships.py`
+- [X] T054 [P] [US4] Unit test for DecisionItem model validation in `tests/unit/test_entity_models.py`
+- [X] T055 [P] [US4] Integration test for query decisions by agenda item in `tests/integration/test_entity_relationships.py`
+- [X] T056 [P] [US4] Integration test for query decisions by effect scope in `tests/integration/test_entity_relationships.py`
 
 ### Implementation for User Story 4
 
-- [ ] T057 [P] [US4] Create DecisionItem model in `src/models/decision_item.py` with id (UUID), agenda_item_id (UUID, FK), decision (String, required), rationale (Text), effect (Enum), created_at fields
-- [ ] T058 [US4] Implement `save_decision_item()` in `src/services/entity_storage.py` to save decision item JSON file to `entities/decision_items/{id}.json`
-- [ ] T059 [US4] Implement `get_decision_items_by_agenda_item()` in `src/services/entity_query.py` to query decision items by agenda_item_id (scan `entities/decision_items/` directory with filtering)
-- [ ] T060 [US4] Implement `get_decision_items_by_effect()` in `src/services/entity_query.py` to filter decisions by effect scope (e.g., "mayAffectOtherPeople")
-- [ ] T061 [US4] Extend `archive-rag query-meeting` CLI command to show decision items in `src/cli/query.py` (add `--decisions` option)
-- [ ] T062 [US4] Add validation for agenda_item_id foreign key in `src/lib/validation.py` (validate agenda item exists before saving decision item)
-- [ ] T063 [US4] Add logging for decision item query operations in `src/services/entity_query.py`
+- [X] T057 [P] [US4] Create DecisionItem model in `src/models/decision_item.py` with id (UUID), agenda_item_id (UUID, FK), decision (String, required), rationale (Text), effect (Enum), created_at fields
+- [X] T058 [US4] Implement `save_decision_item()` in `src/services/entity_storage.py` to save decision item JSON file to `entities/decision_items/{id}.json`
+- [X] T059 [US4] Implement `get_decision_items_by_agenda_item()` in `src/services/entity_query.py` to query decision items by agenda_item_id (scan `entities/decision_items/` directory with filtering)
+- [X] T060 [US4] Implement `get_decision_items_by_effect()` in `src/services/entity_query.py` to filter decisions by effect scope (e.g., "mayAffectOtherPeople")
+- [X] T061 [US4] Extend `archive-rag query-meeting` CLI command to show decision items in `src/cli/query.py` (add `--decisions` option)
+- [X] T062 [US4] Add validation for agenda_item_id foreign key in `src/lib/validation.py` (validate agenda item exists before saving decision item)
+- [X] T063 [US4] Add logging for decision item query operations in `src/services/entity_query.py`
+- [X] T063A [US4] Implement extract_decision_text_for_rag() in `src/services/chunking.py` to extract transcript content from DecisionItem entities for RAG embedding (FR-020: reads decision text from entity JSON files)
+- [X] T063B [US4] Add integration test for decision text extraction coverage in `tests/integration/test_entity_relationships.py` (SC-008: verify 100% of decision text is extracted for RAG embedding)
 
-**Checkpoint**: At this point, User Stories 1, 2, 3, AND 4 should all work independently. Users can navigate decisions with their full context including rationales and effects.
+**Checkpoint**: At this point, User Stories 1, 2, 3, AND 4 should all work independently. Users can navigate decisions with their full context including rationales and effects. Decision text is extracted for RAG embedding.
 
 ---
 
@@ -380,13 +383,13 @@ With multiple developers:
 
 ## Summary
 
-- **Total Tasks**: 109 tasks
+- **Total Tasks**: 111 tasks (2 new tasks added: T063A, T063B for FR-020/SC-008 coverage)
 - **Setup Phase**: 4 tasks
 - **Foundational Phase**: 11 tasks
-- **User Story 1 (P1)**: 13 tasks (13 tests + implementation)
+- **User Story 1 (P1)**: 14 tasks (13 tests + implementation + 1 validation task T027A for FR-024)
 - **User Story 2 (P1)**: 11 tasks (5 tests + implementation)
 - **User Story 3 (P2)**: 10 tasks (3 tests + implementation)
-- **User Story 4 (P2)**: 10 tasks (3 tests + implementation)
+- **User Story 4 (P2)**: 12 tasks (3 tests + implementation + 2 tasks T063A/T063B for FR-020/SC-008)
 - **User Story 5 (P3)**: 8 tasks (2 tests + implementation)
 - **Many-to-Many & Cascade**: 14 tasks
 - **Migration & URL Ingestion**: 13 tasks
