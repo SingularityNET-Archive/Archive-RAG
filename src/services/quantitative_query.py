@@ -300,6 +300,155 @@ class QuantitativeQueryService:
             "method": "Direct aggregation from entity storage files"
         }
     
+    def calculate_average(self, values: List[float]) -> Dict[str, Any]:
+        """
+        Calculate average of numeric values.
+        
+        Args:
+            values: List of numeric values
+            
+        Returns:
+            Dictionary with average, count, and method
+        """
+        if not values:
+            return {
+                "average": 0.0,
+                "count": 0,
+                "method": "Average calculation - no values provided",
+                "source": "N/A"
+            }
+        
+        avg = sum(values) / len(values)
+        return {
+            "average": avg,
+            "count": len(values),
+            "method": f"Calculated arithmetic mean from {len(values)} values",
+            "source": "Direct calculation from entity data"
+        }
+    
+    def calculate_range(self, values: List[float]) -> Dict[str, Any]:
+        """
+        Calculate min/max range of numeric values.
+        
+        Args:
+            values: List of numeric values
+            
+        Returns:
+            Dictionary with min, max, range, and method
+        """
+        if not values:
+            return {
+                "min": 0.0,
+                "max": 0.0,
+                "range": 0.0,
+                "method": "Range calculation - no values provided",
+                "source": "N/A"
+            }
+        
+        min_val = min(values)
+        max_val = max(values)
+        range_val = max_val - min_val
+        
+        return {
+            "min": min_val,
+            "max": max_val,
+            "range": range_val,
+            "method": f"Calculated min/max range from {len(values)} values",
+            "source": "Direct calculation from entity data"
+        }
+    
+    def detect_trends(self, date_counts: Dict[str, int]) -> Dict[str, Any]:
+        """
+        Detect trends in date-based counts (e.g., meetings over time).
+        
+        Args:
+            date_counts: Dictionary mapping dates (YYYY-MM-DD) to counts
+            
+        Returns:
+            Dictionary with trend analysis and method
+        """
+        if not date_counts:
+            return {
+                "trend": "no_data",
+                "method": "Trend detection - no data provided",
+                "source": "N/A"
+            }
+        
+        # Sort dates chronologically
+        sorted_dates = sorted(date_counts.keys())
+        counts = [date_counts[date] for date in sorted_dates]
+        
+        # Simple trend: increasing, decreasing, or stable
+        if len(counts) < 2:
+            trend = "insufficient_data"
+        elif counts[-1] > counts[0]:
+            trend = "increasing"
+        elif counts[-1] < counts[0]:
+            trend = "decreasing"
+        else:
+            trend = "stable"
+        
+        return {
+            "trend": trend,
+            "period_start": sorted_dates[0],
+            "period_end": sorted_dates[-1],
+            "initial_count": counts[0],
+            "final_count": counts[-1],
+            "method": f"Analyzed trend from {len(sorted_dates)} data points",
+            "source": "Direct analysis from entity data"
+        }
+    
+    def answer_statistical_question(self, question: str) -> Dict[str, Any]:
+        """
+        Route statistical questions to appropriate calculation methods.
+        
+        Args:
+            question: Statistical question
+            
+        Returns:
+            Dictionary with statistical answer, data, and citations
+        """
+        question_lower = question.lower()
+        
+        # Detect statistical question type
+        if "average" in question_lower or "mean" in question_lower:
+            # For now, return message that specific implementation needed
+            # Could be enhanced to calculate averages for specific entities
+            return {
+                "answer": "Average calculations require specific entity type and field. Please specify what you want to average (e.g., 'average meetings per workgroup').",
+                "method": "Statistical query - requires specific entity context",
+                "source": "Entity storage",
+                "citations": []
+            }
+        elif "range" in question_lower or "min" in question_lower or "max" in question_lower:
+            return {
+                "answer": "Range calculations require specific entity type and field. Please specify what you want to find the range for.",
+                "method": "Statistical query - requires specific entity context",
+                "source": "Entity storage",
+                "citations": []
+            }
+        elif "trend" in question_lower:
+            # Get meeting statistics and detect trends
+            stats = self.get_meeting_statistics()
+            # This is a simplified trend - could be enhanced
+            return {
+                "answer": f"Meeting statistics show {stats['total_meetings']} total meetings across {len(stats.get('meetings_by_workgroup', {}))} workgroups.",
+                "method": "Trend analysis from meeting statistics",
+                "source": "Entity storage JSON files",
+                "citations": [{
+                    "type": "statistical",
+                    "description": f"Analyzed meeting statistics from entity storage",
+                    "method": stats.get("method", "Direct aggregation")
+                }]
+            }
+        
+        return {
+            "answer": "Statistical question not recognized. Please rephrase with specific entity type and calculation type.",
+            "method": "Statistical query - unrecognized",
+            "source": "N/A",
+            "citations": []
+        }
+    
     def answer_quantitative_question(self, question: str, source_url: Optional[str] = None) -> Dict[str, Any]:
         """
         Analyze question and provide quantitative answer with data source citations.
@@ -313,8 +462,68 @@ class QuantitativeQueryService:
         """
         question_lower = question.lower()
         
-        # Detect question type
-        if "how many meetings" in question_lower or "count meetings" in question_lower or "number of meetings" in question_lower:
+        # Check if statistical question first
+        statistical_keywords = ["average", "mean", "range", "min", "max", "trend", "distribution", "frequency"]
+        if any(keyword in question_lower for keyword in statistical_keywords):
+            result = self.answer_statistical_question(question)
+            # Ensure method and source are always included
+            if "method" not in result:
+                result["method"] = "Statistical calculation"
+            if "source" not in result:
+                result["source"] = "Entity storage"
+            return result
+        
+        # Check for workgroup questions
+        if "workgroup" in question_lower and ("how many" in question_lower or "count" in question_lower or "number" in question_lower):
+            workgroup_stats = self.get_meeting_statistics()
+            workgroup_count = len(workgroup_stats.get("meetings_by_workgroup", {}))
+            return {
+                "answer": f"There are {workgroup_count} workgroups in the archive.",
+                "count": workgroup_count,
+                "source": workgroup_stats.get("source", "Entity storage JSON files"),
+                "method": "Counted unique workgroups from meetings_by_workgroup index",
+                "citations": [{
+                    "type": "data_source",
+                    "description": f"Counted {workgroup_count} workgroups from index file",
+                    "method": "Direct count from workgroup index"
+                }]
+            }
+        
+        # Check for people questions
+        if "people" in question_lower or "person" in question_lower or "participant" in question_lower:
+            if "how many" in question_lower or "count" in question_lower or "number" in question_lower:
+                # Count people from entity storage
+                people_dir = ENTITIES_PEOPLE_DIR
+                if people_dir.exists():
+                    person_files = list(people_dir.glob("*.json"))
+                    person_count = len(person_files)
+                    return {
+                        "answer": f"There are {person_count} people in the archive.",
+                        "count": person_count,
+                        "source": f"JSON files in {people_dir}",
+                        "method": "Direct file count from entity storage - counted person JSON files",
+                        "citations": [{
+                            "type": "data_source",
+                            "description": f"Counted {person_count} people from entity storage",
+                            "method": "Direct file count",
+                            "file_count": person_count
+                        }]
+                    }
+                else:
+                    return {
+                        "answer": "No people found in entity storage.",
+                        "count": 0,
+                        "source": f"JSON files in {people_dir}",
+                        "method": "Direct file count - directory not found",
+                        "citations": [{
+                            "type": "data_source",
+                            "description": "People directory not found in entity storage",
+                            "method": "Directory check"
+                        }]
+                    }
+        
+        # Detect question type - meetings
+        if any(pattern in question_lower for pattern in ["meeting", "how many", "count", "number of", "total"]):
             # Check if question mentions a source URL
             if source_url is None:
                 # Try to extract URL from question

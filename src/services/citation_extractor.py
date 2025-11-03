@@ -53,6 +53,24 @@ def extract_citations(retrieved_chunks: List[Dict[str, Any]]) -> List[Citation]:
     return citations
 
 
+def create_no_evidence_citation(index_name: str) -> Citation:
+    """
+    Create citation for "no evidence" cases.
+    
+    Args:
+        index_name: Name of the index that was searched
+        
+    Returns:
+        Citation explaining why no evidence was found
+    """
+    return Citation(
+        meeting_id="no-evidence",
+        date=datetime.utcnow().strftime("%Y-%m-%d"),
+        speaker="System",
+        excerpt=f"No evidence found in retrieved chunks. RAG query searched index '{index_name}' but found no relevant results above the similarity threshold."
+    )
+
+
 def format_citations_as_text(citations: List[Citation]) -> str:
     """
     Format citations as text output.

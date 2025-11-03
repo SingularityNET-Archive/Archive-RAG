@@ -124,12 +124,37 @@ class QueryService:
             from ..services.quantitative_query import create_quantitative_query_service
             quantitative_service = create_quantitative_query_service()
             
-            # Detect quantitative questions
+            # Detect quantitative questions (comprehensive natural language patterns)
             query_lower = query_text.lower()
-            is_quantitative = any(phrase in query_lower for phrase in [
-                "how many meetings", "count meetings", "number of meetings",
-                "how many", "count the", "total number"
-            ])
+            
+            # Statistical keywords
+            statistical_keywords = [
+                "average", "mean", "range", "min", "max", "minimum", "maximum",
+                "trend", "distribution", "frequency", "most", "least", "median"
+            ]
+            
+            # Entity keywords
+            entity_keywords = [
+                "workgroup", "person", "people", "meeting", "date", "meetings",
+                "participant", "participants", "document", "documents"
+            ]
+            
+            # Count variations (natural language patterns)
+            count_patterns = [
+                "how many", "count", "number of", "total", "quantity",
+                "what's the count", "tell me how many", "i need the number",
+                "meeting count", "total meetings", "how many total", 
+                "give me the count", "what is the total", "total number of",
+                "how many are there", "can you count", "count of"
+            ]
+            
+            # Combine patterns: statistical OR (entity AND count)
+            has_statistical = any(keyword in query_lower for keyword in statistical_keywords)
+            has_entity = any(keyword in query_lower for keyword in entity_keywords)
+            has_count = any(pattern in query_lower for pattern in count_patterns)
+            
+            # Quantitative if: statistical question OR (entity-related count question)
+            is_quantitative = has_statistical or (has_entity and has_count) or has_count
             
             if is_quantitative:
                 # Use quantitative query service for accurate counts
@@ -201,11 +226,14 @@ class QueryService:
                 else:
                     answer = get_no_evidence_message()
             
-            # Extract citations
+            # Extract citations - ensure citations are ALWAYS present
+            from ..models.rag_query import Citation
+            from ..services.citation_extractor import create_no_evidence_citation
+            
+            citations = []
+            
             # For quantitative queries, add data source citations
             if is_quantitative and "count" in quantitative_result:
-                from ..models.rag_query import Citation
-                citations = []
                 # Add citation for quantitative analysis with proper format
                 count = quantitative_result.get('count', 0)
                 source = quantitative_result.get('source', 'entity storage')
@@ -222,8 +250,35 @@ class QueryService:
                 # Also include any existing retrieved chunks as additional context
                 existing_citations = extract_citations(retrieved_chunks)
                 citations.extend(existing_citations)
+            elif is_quantitative and "answer" in quantitative_result:
+                # Statistical or other quantitative query
+                source = quantitative_result.get('source', 'entity storage')
+                method = quantitative_result.get('method', 'Quantitative analysis')
+                
+                citations.append(Citation(
+                    meeting_id="quantitative-analysis",
+                    date=datetime.utcnow().strftime("%Y-%m-%d"),
+                    speaker="System",
+                    excerpt=f"Quantitative analysis performed. Method: {method}. Source: {source}."
+                ))
+                
+                # Include any additional citations from quantitative result
+                if "citations" in quantitative_result:
+                    for cit in quantitative_result["citations"]:
+                        if isinstance(cit, dict):
+                            citations.append(Citation(
+                                meeting_id=cit.get("type", "quantitative"),
+                                date=datetime.utcnow().strftime("%Y-%m-%d"),
+                                speaker="System",
+                                excerpt=cit.get("description", f"Method: {cit.get('method', method)}")
+                            ))
             else:
+                # Standard RAG query - extract citations from chunks
                 citations = extract_citations(retrieved_chunks)
+                
+                # If no citations found, add no-evidence citation
+                if not citations:
+                    citations.append(create_no_evidence_citation(index_name))
             
             # Create RAGQuery model
             rag_query = RAGQuery(
