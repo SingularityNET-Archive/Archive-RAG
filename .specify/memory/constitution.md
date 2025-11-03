@@ -1,25 +1,23 @@
 <!--
   Sync Impact Report:
   
-  Version change: 2.2.0 → 2.3.0 (MINOR: Added Structured Data & Entity Discipline section)
+  Version change: 2.3.0 → 2.3.1 (PATCH: Clarified compliance review process with automated verification)
   
   Modified principles:
-    - V. Auditability & Transparency: Enhanced entity extraction guidance to reflect structured entity model
-    - Technology Discipline: Added entity storage requirements (local JSON files, no external database dependencies)
+    - Governance: Enhanced compliance review guidance to mention automated compliance checking tools
   
-  Added sections:
-    - Structured Data & Entity Discipline (new section under Additional Constraints)
+  Added sections: None
   
   Removed sections: None
   
   Templates requiring updates:
-    ✅ plan-template.md (constitution check section should reference entity discipline for data model features)
+    ✅ plan-template.md (already references constitution check process, compatible)
     ✅ spec-template.md (no direct constitution references, compatible)
     ✅ tasks-template.md (no direct constitution references, compatible)
     ✅ checklist-template.md (no direct constitution references, compatible)
   
   Documentation requiring updates:
-    ✅ README.md (entity extraction section already documents local JSON storage and entity model)
+    ✅ README.md (already includes constitution compliance checking section)
   
   Follow-up TODOs: None
 -->
@@ -115,9 +113,9 @@ This constitution supersedes all other practices and conventions. Amendments req
    - MAJOR: Backward incompatible governance/principle removals or redefinitions
    - MINOR: New principle/section added or materially expanded guidance
    - PATCH: Clarifications, wording, typo fixes, non-semantic refinements
-3. **Compliance Review**: All PRs and reviews must verify compliance with these principles
+3. **Compliance Review**: All PRs and reviews must verify compliance with these principles. Automated compliance checking tools are available via `archive-rag check-compliance` to verify adherence during development and in CI/CD pipelines
 4. **Complexity Justification**: Any violations of simplicity or determinism principles must be documented and justified
 
 All development work must align with these principles. When conflicts arise between practices, the constitution takes precedence.
 
-**Version**: 2.3.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-03
+**Version**: 2.3.1 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-03

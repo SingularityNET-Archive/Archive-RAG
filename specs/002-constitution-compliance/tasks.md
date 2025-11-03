@@ -157,14 +157,14 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T057 [P] Add comprehensive documentation for compliance checking in `README.md`
-- [ ] T058 [P] Update documentation with compliance usage examples in `docs/`
-- [ ] T059 [P] Add compliance checking to CI/CD pipeline (GitHub Actions workflow)
-- [ ] T060 [P] Create pre-commit hook for compliance checks in `.git/hooks/pre-commit`
+- [X] T057 [P] Add comprehensive documentation for compliance checking in `README.md`
+- [X] T058 [P] Update documentation with compliance usage examples in `docs/`
+- [X] T059 [P] Add compliance checking to CI/CD pipeline (GitHub Actions workflow)
+- [X] T060 [P] Create pre-commit hook for compliance checks in `.git/hooks/pre-commit`
 - [X] T061 Implement compliance audit report generation with historical tracking in `src/lib/compliance.py`
 - [X] T062 [P] Add compliance metrics and reporting in `src/services/compliance_checker.py`
 - [X] T063 Code cleanup and refactoring across compliance checking modules
-- [ ] T064 Run quickstart.md validation to ensure all compliance examples work
+- [X] T064 Run quickstart.md validation to ensure all compliance examples work
 - [X] T065 [P] Performance optimization for compliance checks (minimize overhead)
 - [X] T066 Add error handling and recovery for compliance check failures in `src/lib/compliance.py`
 - [X] T067 [P] Add logging for all compliance operations with audit trail support in `src/lib/compliance.py`

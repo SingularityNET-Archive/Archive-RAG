@@ -92,6 +92,135 @@ This project adheres to the Archive-RAG Constitution:
 
 See [.specify/memory/constitution.md](.specify/memory/constitution.md) for details.
 
+## Constitution Compliance Checking
+
+The Archive-RAG system includes automated compliance verification to ensure all operations comply with the Archive-RAG Constitution. This feature verifies that entity operations, embeddings, LLM inference, and FAISS storage use only local Python code without external API dependencies.
+
+### Overview
+
+Constitution compliance checking provides multiple layers of verification:
+
+- **Static Analysis**: Detects external API imports, HTTP calls, and non-Python dependencies in source code
+- **Runtime Monitoring**: Monitors network calls and process spawns during execution
+- **Automated Tests**: Verifies compliance through unit, integration, and contract tests
+
+### Basic Usage
+
+```bash
+# Run all compliance checks (static analysis + tests)
+archive-rag check-compliance
+
+# Run only static analysis checks
+archive-rag check-compliance --static --no-tests
+
+# Run only compliance tests
+archive-rag check-compliance --tests --no-static
+
+# Generate JSON report
+archive-rag check-compliance --output-format json --report-file compliance-report.json
+
+# Generate markdown report
+archive-rag check-compliance --output-format markdown --report-file compliance-report.md
+```
+
+### Example Output
+
+When compliance checks pass:
+
+```
+Constitution Compliance Report
+==============================
+
+Overall Status: PASS
+
+Static Analysis: PASS (45 files checked, 0 violations)
+  ✓ No external API imports detected
+  ✓ No non-Python dependencies detected
+  ✓ No HTTP calls in source code
+
+Runtime Checks: PASS (100 operations monitored, 0 violations)
+  ✓ Entity operations use local storage only
+  ✓ Embedding generation uses local models only
+  ✓ LLM inference uses local models only
+  ✓ FAISS operations use local storage only
+
+Tests: PASS (25 tests run, 95% coverage)
+  ✓ Entity operations pass compliance tests
+  ✓ Embedding operations pass compliance tests
+  ✓ LLM operations pass compliance tests
+
+No violations detected. All compliance checks passed.
+```
+
+### Handling Violations
+
+If violations are detected, the report includes detailed information:
+
+```
+Constitution Compliance Report
+==============================
+
+Overall Status: FAIL
+
+Static Analysis: FAIL (45 files checked, 2 violations)
+
+Violations Detected:
+
+1. External API Import
+   Principle: Technology Discipline - "No external API dependency for core functionality"
+   Location: src/services/embedding.py:5
+   Violation: import requests
+   Recommended Action: Use local embedding model instead of remote API
+
+2. External API Call
+   Principle: Technology Discipline - "Local embeddings + FAISS storage"
+   Location: src/services/rag_generator.py:45
+   Violation: requests.post("https://api.openai.com/v1/chat/completions", ...)
+   Recommended Action: Use local LLM model instead of remote API
+```
+
+### Integration with Development Workflow
+
+#### Pre-commit Hook
+
+You can set up a pre-commit hook to check compliance before committing:
+
+```bash
+# Create pre-commit hook
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/bash
+archive-rag check-compliance --static
+if [ $? -ne 0 ]; then
+    echo "Constitution violations detected. Fix before committing."
+    exit 1
+fi
+EOF
+chmod +x .git/hooks/pre-commit
+```
+
+#### CI/CD Integration
+
+Add compliance checking to your CI/CD pipeline (see `.github/workflows/compliance-check.yml` for a complete example).
+
+### Compliance Check Types
+
+The system verifies compliance across multiple categories:
+
+- **Entity Operations**: Verify local JSON file storage only
+- **Embedding Generation**: Verify local embedding models only (no remote APIs)
+- **LLM Inference**: Verify local LLM models only (no remote APIs)
+- **FAISS Operations**: Verify local FAISS index storage only
+- **Python-Only**: Verify no external binaries or non-Python dependencies
+- **CLI Support**: Verify all CLI commands work without external dependencies
+
+### Documentation
+
+For detailed information about constitution compliance:
+
+- **Quickstart Guide**: [specs/002-constitution-compliance/quickstart.md](specs/002-constitution-compliance/quickstart.md)
+- **Specification**: [specs/002-constitution-compliance/spec.md](specs/002-constitution-compliance/spec.md)
+- **Implementation Plan**: [specs/002-constitution-compliance/plan.md](specs/002-constitution-compliance/plan.md)
+
 ## Entity Extraction
 
 The Archive-RAG system automatically extracts structured entities from meeting records during ingestion, creating a relational entity-based data model for efficient querying and relationship navigation.
