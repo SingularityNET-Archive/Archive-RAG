@@ -24,6 +24,7 @@ from src.models.document import Document
 from src.models.agenda_item import AgendaItem
 from src.models.decision_item import DecisionItem, DecisionEffect
 from src.models.tag import Tag
+from src.services.entity_storage import load_meeting_person
 
 logger = get_logger(__name__)
 
@@ -546,5 +547,91 @@ class EntityQueryService:
             
         except Exception as e:
             logger.error("query_meetings_by_tag_failed", tag_value=tag_value, tag_type=tag_type, error=str(e))
+            raise
+    
+    def get_meetings_by_person(self, person_id: UUID) -> List[Meeting]:
+        """
+        Get all meetings attended by a specific person using index file.
+        
+        Args:
+            person_id: UUID of person
+        
+        Returns:
+            List of Meeting entities attended by the person
+        
+        Raises:
+            ValueError: If index data is invalid or entity loading fails
+        """
+        logger.info("query_meetings_by_person_start", person_id=str(person_id))
+        
+        try:
+            # Load index file
+            index_data = load_index("meeting_person_by_person")
+            person_id_str = str(person_id)
+            
+            # Get meeting IDs from index
+            meeting_ids_str = index_data.get(person_id_str, [])
+            logger.debug("query_meetings_by_person_index_loaded", person_id=str(person_id), meeting_count=len(meeting_ids_str))
+            
+            # Load meeting entities
+            meetings = []
+            for meeting_id_str in meeting_ids_str:
+                try:
+                    meeting_id = UUID(meeting_id_str)
+                    meeting = load_entity(meeting_id, ENTITIES_MEETINGS_DIR, Meeting)
+                    if meeting:
+                        meetings.append(meeting)
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_meetings_by_person_meeting_load_failed", meeting_id=meeting_id_str, error=str(e))
+                    continue
+            
+            logger.info("query_meetings_by_person_success", person_id=str(person_id), meeting_count=len(meetings))
+            return meetings
+            
+        except Exception as e:
+            logger.error("query_meetings_by_person_failed", person_id=str(person_id), error=str(e))
+            raise
+    
+    def get_people_by_meeting(self, meeting_id: UUID) -> List[Person]:
+        """
+        Get all people who attended a specific meeting using index file.
+        
+        Args:
+            meeting_id: UUID of meeting
+        
+        Returns:
+            List of Person entities who attended the meeting
+        
+        Raises:
+            ValueError: If index data is invalid or entity loading fails
+        """
+        logger.info("query_people_by_meeting_start", meeting_id=str(meeting_id))
+        
+        try:
+            # Load index file
+            index_data = load_index("meeting_person_by_meeting")
+            meeting_id_str = str(meeting_id)
+            
+            # Get person IDs from index
+            person_ids_str = index_data.get(meeting_id_str, [])
+            logger.debug("query_people_by_meeting_index_loaded", meeting_id=str(meeting_id), person_count=len(person_ids_str))
+            
+            # Load person entities
+            people = []
+            for person_id_str in person_ids_str:
+                try:
+                    person_id = UUID(person_id_str)
+                    person = load_entity(person_id, ENTITIES_PEOPLE_DIR, Person)
+                    if person:
+                        people.append(person)
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_people_by_meeting_person_load_failed", person_id=person_id_str, error=str(e))
+                    continue
+            
+            logger.info("query_people_by_meeting_success", meeting_id=str(meeting_id), person_count=len(people))
+            return people
+            
+        except Exception as e:
+            logger.error("query_people_by_meeting_failed", meeting_id=str(meeting_id), error=str(e))
             raise
 

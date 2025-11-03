@@ -2,8 +2,9 @@
 
 import json
 import shutil
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, TypeVar, Generic
+from typing import Any, Dict, List, Optional, TypeVar, Generic
 from uuid import UUID
 
 from src.lib.config import (
@@ -21,7 +22,11 @@ from src.lib.config import (
 )
 from src.lib.validation import validate_foreign_key
 from src.lib.compliance import ConstitutionViolation
+from src.lib.logging import get_logger
 from src.models.base import BaseEntity
+
+logger = get_logger(__name__)
+
 from src.models.workgroup import Workgroup
 from src.models.meeting import Meeting
 from src.models.person import Person
@@ -30,6 +35,7 @@ from src.models.action_item import ActionItem
 from src.models.document import Document
 from src.models.decision_item import DecisionItem
 from src.models.tag import Tag
+from src.models.meeting_person import MeetingPerson
 
 T = TypeVar("T", bound=BaseEntity)
 
@@ -436,4 +442,462 @@ def save_tag(tag: Tag) -> None:
     
     # Save tag entity
     save_entity(tag, ENTITIES_TAGS_DIR)
+
+
+def save_meeting_person(meeting_person: MeetingPerson) -> None:
+    """
+    Save MeetingPerson junction record to relations file.
+    
+    Saves to entities/_relations/meeting_person.json as an array.
+    Updates both index files: meeting_person_by_meeting and meeting_person_by_person.
+    
+    Args:
+        meeting_person: MeetingPerson junction entity instance
+    
+    Raises:
+        ValueError: If validation fails or meeting/person doesn't exist
+        IOError: If file write fails
+    """
+    # Validate foreign keys exist
+    validate_foreign_key(
+        meeting_person.meeting_id,
+        ENTITIES_MEETINGS_DIR,
+        Meeting,
+        foreign_key_name="meeting_id"
+    )
+    validate_foreign_key(
+        meeting_person.person_id,
+        ENTITIES_PEOPLE_DIR,
+        Person,
+        foreign_key_name="person_id"
+    )
+    
+    # Load existing relations file
+    relations_file = ENTITIES_RELATIONS_DIR / "meeting_person.json"
+    ENTITIES_RELATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Load existing records
+    existing_records = []
+    if relations_file.exists():
+        try:
+            with open(relations_file, "r", encoding="utf-8") as f:
+                existing_data = json.load(f)
+                if isinstance(existing_data, list):
+                    existing_records = existing_data
+        except (json.JSONDecodeError, Exception):
+            # If file is corrupted, start fresh
+            existing_records = []
+    
+    # Check if this record already exists (same meeting_id + person_id)
+    meeting_id_str = str(meeting_person.meeting_id)
+    person_id_str = str(meeting_person.person_id)
+    
+    # Remove existing record with same meeting_id + person_id if present
+    existing_records = [
+        r for r in existing_records
+        if not (r.get("meeting_id") == meeting_id_str and r.get("person_id") == person_id_str)
+    ]
+    
+    # Add new record
+    record_data = {
+        "id": str(meeting_person.id),
+        "meeting_id": meeting_id_str,
+        "person_id": person_id_str,
+        "role": meeting_person.role,
+        "created_at": meeting_person.created_at.isoformat(),
+        "updated_at": meeting_person.updated_at.isoformat()
+    }
+    existing_records.append(record_data)
+    
+    # Write to temporary file first (atomic write)
+    temp_file = ENTITIES_RELATIONS_DIR / "meeting_person.json.tmp"
+    try:
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(existing_records, f, indent=2, ensure_ascii=False)
+        
+        # Atomic rename
+        temp_file.replace(relations_file)
+    except Exception as e:
+        # Clean up temp file on error
+        if temp_file.exists():
+            temp_file.unlink()
+        raise IOError(f"Failed to save meeting_person relation: {e}") from e
+    
+    # Update index files
+    _update_meeting_person_indexes(meeting_person.meeting_id, meeting_person.person_id, add=True)
+
+
+def load_meeting_person(meeting_id: Optional[UUID] = None, person_id: Optional[UUID] = None) -> List[MeetingPerson]:
+    """
+    Load MeetingPerson junction records from relations file.
+    
+    Args:
+        meeting_id: Optional filter by meeting_id
+        person_id: Optional filter by person_id
+    
+    Returns:
+        List of MeetingPerson entities matching filters
+    
+    Raises:
+        ValueError: If relations file is invalid
+    """
+    relations_file = ENTITIES_RELATIONS_DIR / "meeting_person.json"
+    
+    if not relations_file.exists():
+        return []
+    
+    try:
+        with open(relations_file, "r", encoding="utf-8") as f:
+            records_data = json.load(f)
+        
+        if not isinstance(records_data, list):
+            return []
+        
+        # Convert to MeetingPerson entities
+        meeting_persons = []
+        for record_data in records_data:
+            try:
+                meeting_person = MeetingPerson(
+                    id=UUID(record_data["id"]),
+                    meeting_id=UUID(record_data["meeting_id"]),
+                    person_id=UUID(record_data["person_id"]),
+                    role=record_data.get("role"),
+                    created_at=datetime.fromisoformat(record_data["created_at"].replace("Z", "+00:00")),
+                    updated_at=datetime.fromisoformat(record_data["updated_at"].replace("Z", "+00:00"))
+                )
+                
+                # Apply filters if provided
+                if meeting_id and meeting_person.meeting_id != meeting_id:
+                    continue
+                if person_id and meeting_person.person_id != person_id:
+                    continue
+                
+                meeting_persons.append(meeting_person)
+            except (KeyError, ValueError, TypeError) as e:
+                # Skip invalid records
+                continue
+        
+        return meeting_persons
+        
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in meeting_person relations file: {e}") from e
+    except Exception as e:
+        raise ValueError(f"Failed to load meeting_person relations: {e}") from e
+
+
+def _update_meeting_person_indexes(meeting_id: UUID, person_id: UUID, add: bool = True) -> None:
+    """
+    Update meeting-person index files.
+    
+    Args:
+        meeting_id: Meeting UUID
+        person_id: Person UUID
+        add: If True, add to index; if False, remove from index
+    """
+    meeting_id_str = str(meeting_id)
+    person_id_str = str(person_id)
+    
+    # Update meeting_person_by_meeting index
+    index_by_meeting = load_index("meeting_person_by_meeting")
+    if meeting_id_str not in index_by_meeting:
+        index_by_meeting[meeting_id_str] = []
+    
+    if add:
+        if person_id_str not in index_by_meeting[meeting_id_str]:
+            index_by_meeting[meeting_id_str].append(person_id_str)
+    else:
+        if person_id_str in index_by_meeting[meeting_id_str]:
+            index_by_meeting[meeting_id_str].remove(person_id_str)
+        # Remove empty lists
+        if not index_by_meeting[meeting_id_str]:
+            del index_by_meeting[meeting_id_str]
+    
+    save_index("meeting_person_by_meeting", index_by_meeting)
+    
+    # Update meeting_person_by_person index
+    index_by_person = load_index("meeting_person_by_person")
+    if person_id_str not in index_by_person:
+        index_by_person[person_id_str] = []
+    
+    if add:
+        if meeting_id_str not in index_by_person[person_id_str]:
+            index_by_person[person_id_str].append(meeting_id_str)
+    else:
+        if meeting_id_str in index_by_person[person_id_str]:
+            index_by_person[person_id_str].remove(meeting_id_str)
+        # Remove empty lists
+        if not index_by_person[person_id_str]:
+            del index_by_person[person_id_str]
+    
+    save_index("meeting_person_by_person", index_by_person)
+
+
+def delete_person(person_id: UUID) -> None:
+    """
+    Delete person entity with cascade delete for associated action items.
+    
+    Cascade behavior: Deletes all action items assigned to this person.
+    
+    Args:
+        person_id: UUID of person to delete
+    
+    Raises:
+        IOError: If deletion fails
+    """
+    logger.info("delete_person_start", person_id=str(person_id))
+    
+    # Create backup directory
+    backup_dir = ENTITIES_PEOPLE_DIR.parent / "_backup" / "people"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # Find all action items assigned to this person
+        action_items = []
+        for action_item_file in ENTITIES_ACTION_ITEMS_DIR.glob("*.json"):
+            try:
+                action_item_id = UUID(action_item_file.stem)
+                action_item = load_entity(action_item_id, ENTITIES_ACTION_ITEMS_DIR, ActionItem)
+                if action_item and action_item.assignee_id == person_id:
+                    action_items.append(action_item_id)
+            except (ValueError, AttributeError):
+                continue
+        
+        # Cascade delete: Delete all action items first
+        for action_item_id in action_items:
+            delete_entity(action_item_id, ENTITIES_ACTION_ITEMS_DIR, backup_dir)
+            logger.debug("cascade_delete_action_item", person_id=str(person_id), action_item_id=str(action_item_id))
+        
+        # Delete person entity
+        delete_entity(person_id, ENTITIES_PEOPLE_DIR, backup_dir)
+        
+        # Remove from meeting_person relations
+        meeting_persons = load_meeting_person(person_id=person_id)
+        for mp in meeting_persons:
+            _update_meeting_person_indexes(mp.meeting_id, mp.person_id, add=False)
+        
+        # Remove from relations file
+        relations_file = ENTITIES_RELATIONS_DIR / "meeting_person.json"
+        if relations_file.exists():
+            try:
+                with open(relations_file, "r", encoding="utf-8") as f:
+                    records = json.load(f)
+                records = [r for r in records if r.get("person_id") != str(person_id)]
+                with open(relations_file, "w", encoding="utf-8") as f:
+                    json.dump(records, f, indent=2, ensure_ascii=False)
+            except Exception:
+                pass  # Best effort cleanup
+        
+        logger.info("delete_person_success", person_id=str(person_id), action_items_deleted=len(action_items))
+        
+    except Exception as e:
+        logger.error("delete_person_failed", person_id=str(person_id), error=str(e))
+        raise
+
+
+def delete_workgroup(workgroup_id: UUID) -> None:
+    """
+    Delete workgroup entity with cascade delete for all related entities.
+    
+    Cascade behavior: Deletes all meetings and their related entities:
+    - Documents
+    - AgendaItems
+    - ActionItems
+    - DecisionItems
+    - Tags
+    - MeetingPerson records
+    
+    Args:
+        workgroup_id: UUID of workgroup to delete
+    
+    Raises:
+        IOError: If deletion fails
+    """
+    from src.services.entity_query import EntityQueryService
+    
+    logger.info("delete_workgroup_start", workgroup_id=str(workgroup_id))
+    
+    # Create backup directory
+    backup_dir = ENTITIES_WORKGROUPS_DIR.parent / "_backup" / "workgroups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # Get all meetings for this workgroup
+        query_service = EntityQueryService()
+        meetings = query_service.get_meetings_by_workgroup(workgroup_id)
+        
+        # Cascade delete: Delete all meetings (which will cascade to their related entities)
+        for meeting in meetings:
+            delete_meeting(meeting.id)
+        
+        # Delete workgroup entity
+        delete_entity(workgroup_id, ENTITIES_WORKGROUPS_DIR, backup_dir)
+        
+        logger.info("delete_workgroup_success", workgroup_id=str(workgroup_id), meetings_deleted=len(meetings))
+        
+    except Exception as e:
+        logger.error("delete_workgroup_failed", workgroup_id=str(workgroup_id), error=str(e))
+        raise
+
+
+def delete_meeting(meeting_id: UUID) -> None:
+    """
+    Delete meeting entity with cascade delete for all related entities.
+    
+    Cascade behavior: Deletes all:
+    - Documents
+    - AgendaItems (which cascade to ActionItems and DecisionItems)
+    - Tags
+    - MeetingPerson records
+    
+    Args:
+        meeting_id: UUID of meeting to delete
+    
+    Raises:
+        IOError: If deletion fails
+    """
+    from src.services.entity_query import EntityQueryService
+    
+    logger.info("delete_meeting_start", meeting_id=str(meeting_id))
+    
+    # Create backup directory
+    backup_dir = ENTITIES_MEETINGS_DIR.parent / "_backup" / "meetings"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        query_service = EntityQueryService()
+        
+        # Cascade delete: Delete all documents
+        documents = query_service.get_documents_by_meeting(meeting_id)
+        for document in documents:
+            delete_entity(document.id, ENTITIES_DOCUMENTS_DIR, backup_dir)
+        
+        # Cascade delete: Delete all agenda items (which will cascade to action/decision items)
+        agenda_items = []
+        for agenda_item_file in ENTITIES_AGENDA_ITEMS_DIR.glob("*.json"):
+            try:
+                agenda_item_id = UUID(agenda_item_file.stem)
+                agenda_item = load_entity(agenda_item_id, ENTITIES_AGENDA_ITEMS_DIR, AgendaItem)
+                if agenda_item and agenda_item.meeting_id == meeting_id:
+                    agenda_items.append(agenda_item_id)
+            except (ValueError, AttributeError):
+                continue
+        
+        for agenda_item_id in agenda_items:
+            delete_agenda_item(agenda_item_id)
+        
+        # Cascade delete: Delete all tags
+        tags = []
+        for tag_file in ENTITIES_TAGS_DIR.glob("*.json"):
+            try:
+                tag_id = UUID(tag_file.stem)
+                tag = load_entity(tag_id, ENTITIES_TAGS_DIR, Tag)
+                if tag and tag.meeting_id == meeting_id:
+                    tags.append(tag_id)
+            except (ValueError, AttributeError):
+                continue
+        
+        for tag_id in tags:
+            delete_entity(tag_id, ENTITIES_TAGS_DIR, backup_dir)
+        
+        # Cascade delete: Delete all MeetingPerson records
+        meeting_persons = load_meeting_person(meeting_id=meeting_id)
+        for mp in meeting_persons:
+            _update_meeting_person_indexes(mp.meeting_id, mp.person_id, add=False)
+        
+        # Remove from relations file
+        relations_file = ENTITIES_RELATIONS_DIR / "meeting_person.json"
+        if relations_file.exists():
+            try:
+                with open(relations_file, "r", encoding="utf-8") as f:
+                    records = json.load(f)
+                records = [r for r in records if r.get("meeting_id") != str(meeting_id)]
+                with open(relations_file, "w", encoding="utf-8") as f:
+                    json.dump(records, f, indent=2, ensure_ascii=False)
+            except Exception:
+                pass  # Best effort cleanup
+        
+        # Update workgroup index
+        meeting = load_entity(meeting_id, ENTITIES_MEETINGS_DIR, Meeting)
+        if meeting:
+            index_name = "meetings_by_workgroup"
+            index_data = load_index(index_name)
+            workgroup_id_str = str(meeting.workgroup_id)
+            if workgroup_id_str in index_data:
+                meeting_ids = index_data[workgroup_id_str]
+                if str(meeting_id) in meeting_ids:
+                    meeting_ids.remove(str(meeting_id))
+                if not meeting_ids:
+                    del index_data[workgroup_id_str]
+                save_index(index_name, index_data)
+        
+        # Delete meeting entity
+        delete_entity(meeting_id, ENTITIES_MEETINGS_DIR, backup_dir)
+        
+        logger.info("delete_meeting_success", meeting_id=str(meeting_id), 
+                   documents_deleted=len(documents), agenda_items_deleted=len(agenda_items),
+                   tags_deleted=len(tags), meeting_persons_deleted=len(meeting_persons))
+        
+    except Exception as e:
+        logger.error("delete_meeting_failed", meeting_id=str(meeting_id), error=str(e))
+        raise
+
+
+def delete_agenda_item(agenda_item_id: UUID) -> None:
+    """
+    Delete agenda item entity with cascade delete for related items.
+    
+    Cascade behavior: Deletes all:
+    - ActionItems
+    - DecisionItems
+    
+    Args:
+        agenda_item_id: UUID of agenda item to delete
+    
+    Raises:
+        IOError: If deletion fails
+    """
+    logger.info("delete_agenda_item_start", agenda_item_id=str(agenda_item_id))
+    
+    # Create backup directory
+    backup_dir = ENTITIES_AGENDA_ITEMS_DIR.parent / "_backup" / "agenda_items"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # Cascade delete: Delete all action items
+        action_items = []
+        for action_item_file in ENTITIES_ACTION_ITEMS_DIR.glob("*.json"):
+            try:
+                action_item_id = UUID(action_item_file.stem)
+                action_item = load_entity(action_item_id, ENTITIES_ACTION_ITEMS_DIR, ActionItem)
+                if action_item and action_item.agenda_item_id == agenda_item_id:
+                    action_items.append(action_item_id)
+            except (ValueError, AttributeError):
+                continue
+        
+        for action_item_id in action_items:
+            delete_entity(action_item_id, ENTITIES_ACTION_ITEMS_DIR, backup_dir)
+        
+        # Cascade delete: Delete all decision items
+        decision_items = []
+        for decision_item_file in ENTITIES_DECISION_ITEMS_DIR.glob("*.json"):
+            try:
+                decision_item_id = UUID(decision_item_file.stem)
+                decision_item = load_entity(decision_item_id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem)
+                if decision_item and decision_item.agenda_item_id == agenda_item_id:
+                    decision_items.append(decision_item_id)
+            except (ValueError, AttributeError):
+                continue
+        
+        for decision_item_id in decision_items:
+            delete_entity(decision_item_id, ENTITIES_DECISION_ITEMS_DIR, backup_dir)
+        
+        # Delete agenda item entity
+        delete_entity(agenda_item_id, ENTITIES_AGENDA_ITEMS_DIR, backup_dir)
+        
+        logger.info("delete_agenda_item_success", agenda_item_id=str(agenda_item_id),
+                   action_items_deleted=len(action_items), decision_items_deleted=len(decision_items))
+        
+    except Exception as e:
+        logger.error("delete_agenda_item_failed", agenda_item_id=str(agenda_item_id), error=str(e))
+        raise
 

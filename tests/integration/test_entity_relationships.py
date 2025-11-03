@@ -12,6 +12,7 @@ from src.models.action_item import ActionItem, ActionItemStatus
 from src.models.document import Document
 from src.models.decision_item import DecisionItem, DecisionEffect
 from src.models.tag import Tag
+from src.models.meeting_person import MeetingPerson
 from src.services.entity_storage import (
     save_workgroup,
     save_meeting,
@@ -21,6 +22,11 @@ from src.services.entity_storage import (
     save_document,
     save_decision_item,
     save_tag,
+    save_meeting_person,
+    delete_person,
+    delete_workgroup,
+    delete_meeting,
+    delete_agenda_item,
     load_entity,
     init_entity_storage_directories
 )
@@ -668,4 +674,255 @@ class TestEntityRelationships:
         assert meetings_with_budget[0].id == meeting.id
         assert meetings_with_planning[0].id == meeting.id
         assert meetings_with_collaborative[0].id == meeting.id
+    
+    def test_cascade_delete_person_action_items(self):
+        """Test cascade delete for Person → ActionItems."""
+        # Create person and action items
+        person = Person(display_name="Test Person")
+        save_person(person)
+        
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        save_meeting(meeting)
+        
+        agenda_item = AgendaItem(meeting_id=meeting.id, status="completed")
+        save_agenda_item(agenda_item)
+        
+        action_item1 = ActionItem(
+            agenda_item_id=agenda_item.id,
+            assignee_id=person.id,
+            text="Action 1",
+            status=ActionItemStatus.OPEN
+        )
+        action_item2 = ActionItem(
+            agenda_item_id=agenda_item.id,
+            assignee_id=person.id,
+            text="Action 2",
+            status=ActionItemStatus.OPEN
+        )
+        save_action_item(action_item1)
+        save_action_item(action_item2)
+        
+        # Verify action items exist
+        query_service = EntityQueryService()
+        action_items = query_service.get_action_items_by_person(person.id)
+        assert len(action_items) == 2
+        
+        # Delete person (should cascade delete action items)
+        delete_person(person.id)
+        
+        # Verify person is deleted
+        assert load_entity(person.id, ENTITIES_PEOPLE_DIR, Person) is None
+        
+        # Verify action items are cascade deleted
+        assert load_entity(action_item1.id, ENTITIES_ACTION_ITEMS_DIR, ActionItem) is None
+        assert load_entity(action_item2.id, ENTITIES_ACTION_ITEMS_DIR, ActionItem) is None
+    
+    def test_cascade_delete_workgroup_meetings(self):
+        """Test cascade delete for Workgroup → Meetings and related entities."""
+        # Create workgroup, meeting, and related entities
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        save_meeting(meeting)
+        
+        document = Document(
+            meeting_id=meeting.id,
+            title="Test Document",
+            link="https://example.com/doc"
+        )
+        save_document(document)
+        
+        tag = Tag(
+            meeting_id=meeting.id,
+            topics_covered=["budget"],
+            emotions=["collaborative"]
+        )
+        save_tag(tag)
+        
+        agenda_item = AgendaItem(meeting_id=meeting.id, status="completed")
+        save_agenda_item(agenda_item)
+        
+        action_item = ActionItem(
+            agenda_item_id=agenda_item.id,
+            text="Test Action",
+            status=ActionItemStatus.OPEN
+        )
+        save_action_item(action_item)
+        
+        decision_item = DecisionItem(
+            agenda_item_id=agenda_item.id,
+            decision="Test Decision"
+        )
+        save_decision_item(decision_item)
+        
+        # Verify entities exist
+        assert load_entity(meeting.id, ENTITIES_MEETINGS_DIR, Meeting) is not None
+        assert load_entity(document.id, ENTITIES_DOCUMENTS_DIR, Document) is not None
+        assert load_entity(tag.id, ENTITIES_TAGS_DIR, Tag) is not None
+        assert load_entity(agenda_item.id, ENTITIES_AGENDA_ITEMS_DIR, AgendaItem) is not None
+        assert load_entity(action_item.id, ENTITIES_ACTION_ITEMS_DIR, ActionItem) is not None
+        assert load_entity(decision_item.id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem) is not None
+        
+        # Delete workgroup (should cascade delete all related entities)
+        delete_workgroup(workgroup.id)
+        
+        # Verify workgroup is deleted
+        assert load_entity(workgroup.id, ENTITIES_WORKGROUPS_DIR, Workgroup) is None
+        
+        # Verify all related entities are cascade deleted
+        assert load_entity(meeting.id, ENTITIES_MEETINGS_DIR, Meeting) is None
+        assert load_entity(document.id, ENTITIES_DOCUMENTS_DIR, Document) is None
+        assert load_entity(tag.id, ENTITIES_TAGS_DIR, Tag) is None
+        assert load_entity(agenda_item.id, ENTITIES_AGENDA_ITEMS_DIR, AgendaItem) is None
+        assert load_entity(action_item.id, ENTITIES_ACTION_ITEMS_DIR, ActionItem) is None
+        assert load_entity(decision_item.id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem) is None
+    
+    def test_cascade_delete_meeting_related_entities(self):
+        """Test cascade delete for Meeting → Documents, AgendaItems, Tags, MeetingPerson."""
+        # Create meeting and related entities
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        save_meeting(meeting)
+        
+        person = Person(display_name="Test Person")
+        save_person(person)
+        
+        meeting_person = MeetingPerson(
+            meeting_id=meeting.id,
+            person_id=person.id,
+            role="participant"
+        )
+        save_meeting_person(meeting_person)
+        
+        document = Document(
+            meeting_id=meeting.id,
+            title="Test Document",
+            link="https://example.com/doc"
+        )
+        save_document(document)
+        
+        tag = Tag(
+            meeting_id=meeting.id,
+            topics_covered=["budget"]
+        )
+        save_tag(tag)
+        
+        agenda_item = AgendaItem(meeting_id=meeting.id, status="completed")
+        save_agenda_item(agenda_item)
+        
+        action_item = ActionItem(
+            agenda_item_id=agenda_item.id,
+            text="Test Action",
+            status=ActionItemStatus.OPEN
+        )
+        save_action_item(action_item)
+        
+        decision_item = DecisionItem(
+            agenda_item_id=agenda_item.id,
+            decision="Test Decision"
+        )
+        save_decision_item(decision_item)
+        
+        # Verify entities exist
+        assert load_entity(meeting.id, ENTITIES_MEETINGS_DIR, Meeting) is not None
+        assert load_entity(document.id, ENTITIES_DOCUMENTS_DIR, Document) is not None
+        assert load_entity(tag.id, ENTITIES_TAGS_DIR, Tag) is not None
+        assert load_entity(agenda_item.id, ENTITIES_AGENDA_ITEMS_DIR, AgendaItem) is not None
+        assert load_entity(action_item.id, ENTITIES_ACTION_ITEMS_DIR, ActionItem) is not None
+        assert load_entity(decision_item.id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem) is not None
+        
+        # Delete meeting (should cascade delete all related entities)
+        delete_meeting(meeting.id)
+        
+        # Verify meeting is deleted
+        assert load_entity(meeting.id, ENTITIES_MEETINGS_DIR, Meeting) is None
+        
+        # Verify all related entities are cascade deleted
+        assert load_entity(document.id, ENTITIES_DOCUMENTS_DIR, Document) is None
+        assert load_entity(tag.id, ENTITIES_TAGS_DIR, Tag) is None
+        assert load_entity(agenda_item.id, ENTITIES_AGENDA_ITEMS_DIR, AgendaItem) is None
+        assert load_entity(action_item.id, ENTITIES_ACTION_ITEMS_DIR, ActionItem) is None
+        assert load_entity(decision_item.id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem) is None
+        
+        # Verify MeetingPerson record is removed from relations
+        from src.services.entity_storage import load_meeting_person
+        meeting_persons = load_meeting_person(meeting_id=meeting.id)
+        assert len(meeting_persons) == 0
+    
+    def test_cascade_delete_agenda_item_action_decision_items(self):
+        """Test cascade delete for AgendaItem → ActionItems and DecisionItems."""
+        # Create agenda item and related items
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        save_meeting(meeting)
+        
+        agenda_item = AgendaItem(meeting_id=meeting.id, status="completed")
+        save_agenda_item(agenda_item)
+        
+        action_item1 = ActionItem(
+            agenda_item_id=agenda_item.id,
+            text="Action 1",
+            status=ActionItemStatus.OPEN
+        )
+        action_item2 = ActionItem(
+            agenda_item_id=agenda_item.id,
+            text="Action 2",
+            status=ActionItemStatus.OPEN
+        )
+        save_action_item(action_item1)
+        save_action_item(action_item2)
+        
+        decision_item1 = DecisionItem(
+            agenda_item_id=agenda_item.id,
+            decision="Decision 1"
+        )
+        decision_item2 = DecisionItem(
+            agenda_item_id=agenda_item.id,
+            decision="Decision 2"
+        )
+        save_decision_item(decision_item1)
+        save_decision_item(decision_item2)
+        
+        # Verify entities exist
+        assert load_entity(agenda_item.id, ENTITIES_AGENDA_ITEMS_DIR, AgendaItem) is not None
+        assert load_entity(action_item1.id, ENTITIES_ACTION_ITEMS_DIR, ActionItem) is not None
+        assert load_entity(action_item2.id, ENTITIES_ACTION_ITEMS_DIR, ActionItem) is not None
+        assert load_entity(decision_item1.id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem) is not None
+        assert load_entity(decision_item2.id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem) is not None
+        
+        # Delete agenda item (should cascade delete action and decision items)
+        delete_agenda_item(agenda_item.id)
+        
+        # Verify agenda item is deleted
+        assert load_entity(agenda_item.id, ENTITIES_AGENDA_ITEMS_DIR, AgendaItem) is None
+        
+        # Verify action and decision items are cascade deleted
+        assert load_entity(action_item1.id, ENTITIES_ACTION_ITEMS_DIR, ActionItem) is None
+        assert load_entity(action_item2.id, ENTITIES_ACTION_ITEMS_DIR, ActionItem) is None
+        assert load_entity(decision_item1.id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem) is None
+        assert load_entity(decision_item2.id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem) is None
 

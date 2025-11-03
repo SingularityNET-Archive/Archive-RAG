@@ -195,20 +195,20 @@
 
 **Purpose**: Implement Meeting-Person many-to-many relationship and cascade delete behaviors for all entity relationships
 
-- [ ] T072 [P] Create MeetingPerson junction model in `src/models/meeting_person.py` with meeting_id (UUID, FK), person_id (UUID, FK), role (String), created_at fields
-- [ ] T073 [P] Implement `save_meeting_person()` in `src/services/entity_storage.py` to save junction record to `entities/_relations/meeting_person.json` (append to array)
-- [ ] T074 [P] Implement `load_meeting_person()` in `src/services/entity_storage.py` to read junction records from `entities/_relations/meeting_person.json`
-- [ ] T075 [P] Implement `get_meetings_by_person()` in `src/services/entity_query.py` using index file `_index/meeting_person_by_person.json`
-- [ ] T076 [P] Implement `get_people_by_meeting()` in `src/services/entity_query.py` using index file `_index/meeting_person_by_meeting.json`
-- [ ] T077 [P] Implement meeting-person index update logic in `src/services/entity_storage.py` to maintain both `_index/meeting_person_by_meeting.json` and `_index/meeting_person_by_person.json`
-- [ ] T078 Implement cascade delete for Person → ActionItems in `src/services/entity_storage.py` (delete person → delete all associated action items)
-- [ ] T079 Implement cascade delete for Workgroup → Meetings (and all related entities) in `src/services/entity_storage.py` (delete workgroup → cascade delete all meetings, documents, agenda items, action items, decision items, tags)
-- [ ] T080 Implement cascade delete for Meeting → Documents, AgendaItems, Tags, MeetingPerson records in `src/services/entity_storage.py` (delete meeting → cascade delete all related entities)
-- [ ] T081 Implement cascade delete for AgendaItem → ActionItems, DecisionItems in `src/services/entity_storage.py` (delete agenda item → cascade delete all related items)
-- [ ] T082 [P] Add validation for Meeting → at least one participant requirement in `src/lib/validation.py` (FR-024: meetings must have at least one MeetingPerson record)
-- [ ] T083 [P] Add integration tests for cascade delete behaviors in `tests/integration/test_entity_relationships.py`
-- [ ] T084 Extend `archive-rag query-person --meetings` CLI command in `src/cli/query.py` to query meetings attended by person via many-to-many relationship
-- [ ] T085 Add validation and error handling for cascade delete operations with backup/restore pattern in `src/services/entity_storage.py`
+- [X] T072 [P] Create MeetingPerson junction model in `src/models/meeting_person.py` with meeting_id (UUID, FK), person_id (UUID, FK), role (String), created_at fields
+- [X] T073 [P] Implement `save_meeting_person()` in `src/services/entity_storage.py` to save junction record to `entities/_relations/meeting_person.json` (append to array)
+- [X] T074 [P] Implement `load_meeting_person()` in `src/services/entity_storage.py` to read junction records from `entities/_relations/meeting_person.json`
+- [X] T075 [P] Implement `get_meetings_by_person()` in `src/services/entity_query.py` using index file `_index/meeting_person_by_person.json`
+- [X] T076 [P] Implement `get_people_by_meeting()` in `src/services/entity_query.py` using index file `_index/meeting_person_by_meeting.json`
+- [X] T077 [P] Implement meeting-person index update logic in `src/services/entity_storage.py` to maintain both `_index/meeting_person_by_meeting.json` and `_index/meeting_person_by_person.json`
+- [X] T078 Implement cascade delete for Person → ActionItems in `src/services/entity_storage.py` (delete person → delete all associated action items)
+- [X] T079 Implement cascade delete for Workgroup → Meetings (and all related entities) in `src/services/entity_storage.py` (delete workgroup → cascade delete all meetings, documents, agenda items, action items, decision items, tags)
+- [X] T080 Implement cascade delete for Meeting → Documents, AgendaItems, Tags, MeetingPerson records in `src/services/entity_storage.py` (delete meeting → cascade delete all related entities)
+- [X] T081 Implement cascade delete for AgendaItem → ActionItems, DecisionItems in `src/services/entity_storage.py` (delete agenda item → cascade delete all related items)
+- [X] T082 [P] Add validation for Meeting → at least one participant requirement in `src/lib/validation.py` (FR-024: meetings must have at least one MeetingPerson record)
+- [X] T083 [P] Add integration tests for cascade delete behaviors in `tests/integration/test_entity_relationships.py`
+- [X] T084 Extend `archive-rag query-person --meetings` CLI command in `src/cli/query.py` to query meetings attended by person via many-to-many relationship
+- [X] T085 Add validation and error handling for cascade delete operations with backup/restore pattern in `src/services/entity_storage.py`
 
 ---
 
@@ -391,7 +391,7 @@ With multiple developers:
 - **User Story 3 (P2)**: 10 tasks (3 tests + implementation)
 - **User Story 4 (P2)**: 12 tasks (3 tests + implementation + 2 tasks T063A/T063B for FR-020/SC-008) - COMPLETE
 - **User Story 5 (P3)**: 8 tasks (2 tests + implementation) - COMPLETE
-- **Many-to-Many & Cascade**: 14 tasks
+- **Many-to-Many & Cascade**: 14 tasks - COMPLETE
 - **Migration & URL Ingestion**: 13 tasks
 - **Polish**: 11 tasks
 

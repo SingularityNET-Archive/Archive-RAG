@@ -297,6 +297,11 @@ def query_person_command(
         "--action-items",
         help="Query action items assigned to this person"
     ),
+    meetings: bool = typer.Option(
+        False,
+        "--meetings",
+        help="Query meetings attended by this person via many-to-many relationship"
+    ),
     output_format: str = typer.Option(
         "text",
         "--output-format",
@@ -308,6 +313,9 @@ def query_person_command(
     
     With --action-items flag, retrieves all action items assigned to
     the specified person using the entity-based data model.
+    
+    With --meetings flag, retrieves all meetings attended by this person
+    via the many-to-many relationship (MeetingPerson junction table).
     """
     try:
         # Parse person_id as UUID
@@ -341,9 +349,31 @@ def query_person_command(
                     typer.echo(f"    Created: {item.created_at}")
             
             logger.info("query_person_action_items_success", person_id=str(person_uuid), action_item_count=len(action_items_list))
+        elif meetings:
+            # Query meetings attended by person via many-to-many relationship
+            meetings_list = query_service.get_meetings_by_person(person_uuid)
+            
+            if output_format == "json":
+                import json
+                meetings_data = [meeting.model_dump(mode="json") for meeting in meetings_list]
+                typer.echo(json.dumps({"person_id": str(person_uuid), "meetings": meetings_data, "count": len(meetings_list)}, indent=2))
+            else:
+                # Text format
+                typer.echo(f"Person ID: {person_id}")
+                typer.echo(f"Found {len(meetings_list)} meeting(s) attended")
+                typer.echo("\nMeetings:")
+                for meeting in meetings_list:
+                    typer.echo(f"  - Meeting ID: {meeting.id}")
+                    typer.echo(f"    Date: {meeting.date}")
+                    if meeting.purpose:
+                        typer.echo(f"    Purpose: {meeting.purpose}")
+                    typer.echo(f"    Type: {meeting.meeting_type or 'N/A'}")
+            
+            logger.info("query_person_meetings_success", person_id=str(person_uuid), meeting_count=len(meetings_list))
         else:
             typer.echo(f"Person ID: {person_id}")
             typer.echo("Use --action-items to query action items for this person.")
+            typer.echo("Use --meetings to query meetings attended by this person.")
         
     except Exception as e:
         logger.error("query_person_failed", error=str(e), person_id=person_id)
