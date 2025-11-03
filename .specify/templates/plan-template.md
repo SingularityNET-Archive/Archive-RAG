@@ -40,7 +40,8 @@ Verify compliance with Archive-RAG Constitution principles:
 - **V. Auditability & Transparency**: Immutable logs, audit records, traceable topic/entity extraction implemented?
 - **Additional Constraints**: 
   - Python-only? **YES** - Implementation in Python
-  - Remote model connections required? **YES** - Remote embeddings and LLM inference via API endpoints required
+  - Remote embeddings allowed? **YES** - Remote embeddings via API endpoints are permitted but optional (local fallback required)
+  - Remote LLM inference allowed? **YES** - Remote LLM via API endpoints are permitted but optional (local fallback required)
   - FAISS storage local? **YES** - FAISS vector storage remains local for performance and determinism
   - SHA-256 hashing for tamper detection? PII redaction?
   - Bounded retrieval latency? Safe degradation? Explainability?

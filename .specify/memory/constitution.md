@@ -1,30 +1,27 @@
 <!--
   Sync Impact Report:
   
-  Version change: 2.0.0 → 2.1.0 (MINOR: Added mandatory data source requirement)
+  Version change: 2.1.0 → 2.2.0 (MINOR: Clarified remote embeddings as explicitly allowed/optional)
   
   Modified principles:
-    - Responsible Data & Privacy Discipline: Added mandatory single data source requirement
+    - Technology Discipline: Changed remote model connections from "required" to explicitly "allowed" for embeddings, making remote embeddings optional rather than mandatory
   
-  Added sections:
-    - Data Source Discipline: Mandatory single source URL requirement
+  Added sections: None
   
   Removed sections: None
   
   Templates requiring updates:
-    ✅ plan-template.md (constitution check section compatible)
+    ✅ plan-template.md (updated constitution check section to reflect optional remote embeddings)
     ✅ spec-template.md (no direct constitution references, compatible)
     ✅ tasks-template.md (no direct constitution references, compatible)
     ✅ checklist-template.md (no direct constitution references, compatible)
   
   Documentation requiring updates:
-    ⚠️ README.md (update ingestion examples to reflect mandatory source)
-    ⚠️ Data ingestion documentation (update to reflect mandatory source requirement)
+    ⚠️ README.md (may need update if examples reference required remote processing)
   
   Follow-up TODOs:
-    - Update code to enforce single data source validation
-    - Update ingestion commands to validate source URL
-    - Document migration path for any existing local data
+    - Verify implementation supports optional remote embeddings (local fallback available)
+    - Update documentation if needed to clarify remote embeddings are optional
 -->
 
 # Archive-RAG Constitution
@@ -84,8 +81,10 @@ All actions must be visible and reviewable.
 ### Technology Discipline
 
 - Python-only execution environment
-- **Remote model connections required** for memory-efficient processing (embeddings and LLM inference via API endpoints)
-- Remote processing MUST be configured via environment variables (API URLs and keys)
+- **Remote embeddings allowed** for memory-efficient processing (embeddings via API endpoints are permitted but optional)
+- Remote LLM inference allowed for memory-efficient processing (LLM via API endpoints are permitted but optional)
+- Remote processing MUST be configured via environment variables when used (API URLs and keys)
+- Local fallback for embeddings and LLM inference MUST be available when remote processing is not configured
 - FAISS vector storage remains local for performance and determinism
 - CLI support for all major pipeline stages
 
@@ -109,4 +108,4 @@ This constitution supersedes all other practices and conventions. Amendments req
 
 All development work must align with these principles. When conflicts arise between practices, the constitution takes precedence.
 
-**Version**: 2.1.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-02
+**Version**: 2.2.0 | **Ratified**: 2025-11-02 | **Last Amended**: 2025-11-03
