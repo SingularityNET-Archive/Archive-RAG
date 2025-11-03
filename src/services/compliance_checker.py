@@ -4,6 +4,7 @@ import sys
 import socket
 from typing import List, Callable, Any, Optional, Dict
 from functools import wraps
+from threading import Lock
 
 from src.lib.compliance import (
     ConstitutionViolation,
@@ -15,6 +16,10 @@ from src.lib.compliance import (
 from src.lib.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Singleton instance for ComplianceChecker
+_compliance_checker_instance: Optional['ComplianceChecker'] = None
+_compliance_checker_lock = Lock()
 
 
 class NetworkMonitor:
@@ -275,24 +280,42 @@ class ComplianceChecker:
         violations = []
         
         try:
+            # Check if remote processing is configured (per constitution v2.2.0, remote embeddings/LLM are allowed)
+            from ..lib.remote_config import (
+                get_embedding_remote_config,
+                get_llm_remote_config
+            )
+            
+            # Get configured remote API settings
+            emb_enabled, emb_url, _, _ = get_embedding_remote_config()
+            llm_enabled, llm_url, _, _ = get_llm_remote_config()
+            
+            # Remote processing is allowed when properly configured
+            remote_processing_enabled = (emb_enabled and emb_url) or (llm_enabled and llm_url)
+            
             # Check for external API modules loaded at runtime
+            # Only flag as violations if remote processing is NOT configured
+            # (These modules are legitimate when remote processing is enabled)
             external_modules = {'requests', 'openai', 'httpx', 'urllib3'}
             for module_name in external_modules:
                 if module_name in sys.modules:
-                    violation = ConstitutionViolation(
-                        violation_type=ViolationType.EXTERNAL_API,
-                        principle="Technology Discipline - \"No external API dependency for core functionality\"",
-                        location={
-                            "file": "runtime",
-                            "module": module_name
-                        },
-                        violation_details=f"External API module loaded: {module_name}",
-                        detection_layer=DetectionLayer.RUNTIME,
-                        recommended_action=f"Remove dependency on {module_name}. Use local models instead."
-                    )
-                    violations.append(violation)
+                    if not remote_processing_enabled:
+                        # Remote processing not configured - flag as violation
+                        violation = ConstitutionViolation(
+                            violation_type=ViolationType.EXTERNAL_API,
+                            principle="Technology Discipline - \"No external API dependency for core functionality\"",
+                            location={
+                                "file": "runtime",
+                                "module": module_name
+                            },
+                            violation_details=f"External API module loaded: {module_name}",
+                            detection_layer=DetectionLayer.RUNTIME,
+                            recommended_action=f"Remove dependency on {module_name}. Use local models instead, or configure remote processing via environment variables."
+                        )
+                        violations.append(violation)
+                    # If remote_processing_enabled, these modules are allowed (no violation)
             
-            # Add network monitor violations
+            # Add network monitor violations (network monitor will check for unauthorized connections)
             violations.extend(self.network_monitor.get_violations())
         except Exception as e:
             # Error handling and recovery for compliance check failures (T066 - Phase 7)
@@ -459,4 +482,43 @@ class ComplianceChecker:
         violations.extend(self.network_monitor.get_violations())
         violations.extend(self.process_monitor.get_violations())
         return violations
+
+
+def get_compliance_checker() -> ComplianceChecker:
+    """
+    Get the singleton ComplianceChecker instance.
+    
+    This ensures all services share the same compliance checker instance,
+    preventing conflicts with socket monkey-patching and network monitoring.
+    
+    Returns:
+        The singleton ComplianceChecker instance
+    """
+    global _compliance_checker_instance
+    
+    # Double-checked locking pattern for thread-safe singleton
+    if _compliance_checker_instance is None:
+        with _compliance_checker_lock:
+            if _compliance_checker_instance is None:
+                _compliance_checker_instance = ComplianceChecker()
+                logger.debug("compliance_checker_singleton_created")
+    
+    return _compliance_checker_instance
+
+
+def reset_compliance_checker() -> None:
+    """
+    Reset the singleton ComplianceChecker instance (for testing).
+    
+    This is useful for testing to ensure clean state between tests.
+    """
+    global _compliance_checker_instance
+    
+    with _compliance_checker_lock:
+        if _compliance_checker_instance is not None:
+            # Disable monitoring and restore socket before resetting
+            if _compliance_checker_instance.enabled:
+                _compliance_checker_instance.disable_monitoring()
+            _compliance_checker_instance = None
+            logger.debug("compliance_checker_singleton_reset")
 

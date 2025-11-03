@@ -103,9 +103,12 @@ class RemoteEmbeddingService:
         )
         
         # Create client with longer timeout and retries for connection issues
+        # Normalize base_url: ensure it doesn't have trailing slash (OpenAI client handles it)
+        base_url = (self.api_url.rstrip('/') + '/') if self.api_url else None
+        
         client = openai.OpenAI(
             api_key=self.api_key,
-            base_url=self.api_url or None,
+            base_url=base_url,
             timeout=120.0,  # 2 minute timeout for slow connections
             max_retries=0,  # We handle retries manually with better control
             http_client=http_client  # Use custom HTTP client with better connection handling

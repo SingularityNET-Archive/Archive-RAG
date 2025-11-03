@@ -8,7 +8,6 @@ from datetime import datetime
 
 from src.lib.compliance import ComplianceReport, ComplianceStatus
 from src.lib.static_analysis import check_no_external_apis, check_python_standard_library_only
-from src.services.compliance_checker import ComplianceChecker
 from src.lib.logging import get_logger
 
 logger = get_logger(__name__)
@@ -64,7 +63,8 @@ def check_compliance_command(
         
         # Runtime checks (placeholder - would need actual execution)
         if runtime:
-            checker = ComplianceChecker()
+            from ..services.compliance_checker import get_compliance_checker
+            checker = get_compliance_checker()
             checker.enable_monitoring()
             
             # Runtime checks would be performed during actual operations

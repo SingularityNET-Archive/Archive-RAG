@@ -18,18 +18,14 @@ from ..services.compliance_checker import ComplianceChecker
 
 logger = get_logger(__name__)
 
-# Global compliance checker instance for CLI commands
-_cli_compliance_checker = None
-
-
 def _get_cli_compliance_checker():
-    """Get or create compliance checker instance for CLI operations (T055 - US4)."""
-    global _cli_compliance_checker
-    if _cli_compliance_checker is None:
-        _cli_compliance_checker = ComplianceChecker()
-        # Enable monitoring for CLI operations
-        _cli_compliance_checker.enable_monitoring()
-    return _cli_compliance_checker
+    """Get singleton compliance checker instance for CLI operations (T055 - US4)."""
+    from ..services.compliance_checker import get_compliance_checker
+    checker = get_compliance_checker()
+    # Ensure monitoring is enabled for CLI operations
+    if not checker.enabled:
+        checker.enable_monitoring()
+    return checker
 
 
 def query_command(

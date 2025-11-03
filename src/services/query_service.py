@@ -65,8 +65,8 @@ class QueryService:
             
             # Verify entity-based FAISS index compatibility (T047 - US3)
             # Check that index metadata contains meeting_id references (entity-based)
-            from ..services.compliance_checker import ComplianceChecker
-            checker = ComplianceChecker()
+            from ..services.compliance_checker import get_compliance_checker
+            checker = get_compliance_checker()
             violations = checker.check_faiss_operations()
             if violations:
                 raise violations[0]

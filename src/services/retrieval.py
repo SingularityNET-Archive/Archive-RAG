@@ -14,19 +14,10 @@ from ..lib.compliance import ConstitutionViolation
 
 logger = get_logger(__name__)
 
-# Global compliance checker instance
-_compliance_checker = None
-
-
 def _get_compliance_checker():
-    """Get or create compliance checker instance."""
-    global _compliance_checker
-    if _compliance_checker is None:
-        from ..services.compliance_checker import ComplianceChecker
-        _compliance_checker = ComplianceChecker()
-        # Enable monitoring by default for compliance checking
-        _compliance_checker.enable_monitoring()
-    return _compliance_checker
+    """Get singleton compliance checker instance."""
+    from ..services.compliance_checker import get_compliance_checker
+    return get_compliance_checker()
 
 
 def load_index(index_name: str) -> tuple[faiss.Index, EmbeddingIndex]:
