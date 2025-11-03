@@ -148,13 +148,20 @@ class QueryService:
                 "how many are there", "can you count", "count of"
             ]
             
-            # Combine patterns: statistical OR (entity AND count)
+            # List/retrieval patterns (not quantitative, but handled by quantitative service)
+            list_patterns = [
+                "list", "show me", "what are", "what documents", "show documents",
+                "documents for", "documents in", "all documents", "show all"
+            ]
+            has_list = any(pattern in query_lower for pattern in list_patterns)
+            
+            # Combine patterns: statistical OR (entity AND count) OR (list pattern)
             has_statistical = any(keyword in query_lower for keyword in statistical_keywords)
             has_entity = any(keyword in query_lower for keyword in entity_keywords)
             has_count = any(pattern in query_lower for pattern in count_patterns)
             
-            # Quantitative if: statistical question OR (entity-related count question)
-            is_quantitative = has_statistical or (has_entity and has_count) or has_count
+            # Quantitative if: statistical question OR (entity-related count question) OR (list question with document/entity keyword)
+            is_quantitative = has_statistical or (has_entity and has_count) or has_count or (has_list and ("document" in query_lower or any(e in query_lower for e in entity_keywords)))
             
             if is_quantitative:
                 # Use quantitative query service for accurate counts
@@ -210,6 +217,34 @@ class QueryService:
                                 "method": quantitative_result.get('method', ''),
                                 "source": quantitative_result.get('source', '')
                             }
+                elif "answer" in quantitative_result:
+                    # This is a list/retrieval query (like document listing)
+                    answer = quantitative_result["answer"]
+                    
+                    # Include method and source in answer if provided
+                    if "source" in quantitative_result and "method" in quantitative_result:
+                        answer = f"{answer}\n\n**Data Source:** {quantitative_result['source']}\n**Method:** {quantitative_result['method']}"
+                    
+                    # Use quantitative result as evidence
+                    evidence_found = True
+                    
+                    # Include document details if provided (full list already in answer, but add count if truncated)
+                    if "documents" in quantitative_result and "count" in quantitative_result:
+                        docs = quantitative_result["documents"]
+                        count = quantitative_result.get("count", len(docs))
+                        if len(docs) > 50 and count > 50:
+                            # Full list already in answer, just ensure count is clear
+                            pass
+                    
+                    # Create proper chunk structure for citation
+                    if not retrieved_chunks:
+                        retrieved_chunks = [{
+                            "text": f"Entity query: {quantitative_result.get('count', 0)} documents retrieved from entity storage",
+                            "meeting_id": "entity-query",
+                            "chunk_index": 0,
+                            "source": quantitative_result.get("source", "Entity storage"),
+                            "score": 1.0
+                        }]
                 else:
                     # Fall back to RAG if quantitative query doesn't handle it
                     evidence_found = check_evidence(retrieved_chunks)

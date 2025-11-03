@@ -544,8 +544,199 @@ class QuantitativeQueryService:
                 }]
             }
         
-        # Check for document questions
-        if "document" in question_lower and ("how many" in question_lower or "count" in question_lower or "number" in question_lower):
+        # Check for document list questions (prioritize over count)
+        if ("document" in question_lower or "documents" in question_lower) and (
+            "list" in question_lower or "show" in question_lower or "all" in question_lower or 
+            "for" in question_lower or "workgroup" in question_lower or "meeting" in question_lower
+        ):
+            from ..services.entity_query import EntityQueryService
+            entity_query = EntityQueryService()
+            
+            # Check if filtering by workgroup or meeting
+            if "workgroup" in question_lower:
+                from ..services.entity_storage import load_entity
+                from ..models.workgroup import Workgroup
+                
+                # Try to extract workgroup name or ID from question
+                # Look for workgroup names (common patterns)
+                workgroup_keywords = [
+                    "governance", "archives", "education", "gamers", "github", 
+                    "treasury", "knowledge", "latam", "moderators", "onboarding",
+                    "process", "strategy", "pbl", "ethics", "ai"
+                ]
+                
+                workgroup_id = None
+                workgroup_name = None
+                
+                # Check if question contains workgroup name
+                for keyword in workgroup_keywords:
+                    if keyword in question_lower:
+                        # Try to find workgroup by name (partial match)
+                        workgroups_dir = ENTITIES_WORKGROUPS_DIR
+                        for wg_file in workgroups_dir.glob("*.json"):
+                            try:
+                                wg_uuid = UUID(wg_file.stem)
+                                wg = load_entity(wg_uuid, workgroups_dir, Workgroup)
+                                if wg and keyword.lower() in wg.name.lower():
+                                    workgroup_id = wg.id
+                                    workgroup_name = wg.name
+                                    break
+                            except Exception:
+                                continue
+                        if workgroup_id:
+                            break
+                
+                # If workgroup found, get documents for that workgroup
+                if workgroup_id:
+                    documents = entity_query.get_documents_by_workgroup(workgroup_id)
+                    
+                    if documents:
+                        doc_list = []
+                        for doc in documents[:50]:  # Limit to first 50 for answer
+                            doc_list.append(f"  - {doc.title}: {doc.link}")
+                        
+                        answer = f"Found {len(documents)} document(s) for {workgroup_name} workgroup:\n" + "\n".join(doc_list)
+                        if len(documents) > 50:
+                            answer += f"\n  ... and {len(documents) - 50} more documents"
+                        
+                        return {
+                            "answer": answer,
+                            "count": len(documents),
+                            "workgroup_id": str(workgroup_id),
+                            "workgroup_name": workgroup_name,
+                            "documents": [{"title": doc.title, "link": str(doc.link)} for doc in documents],
+                            "source": "Entity storage JSON files",
+                            "method": f"Direct entity query - filtered by workgroup '{workgroup_name}'",
+                            "citations": [{
+                                "type": "data_source",
+                                "description": f"Listed {len(documents)} documents for workgroup {workgroup_name}",
+                                "method": "Entity query - filtered by workgroup",
+                                "workgroup_id": str(workgroup_id),
+                                "file_count": len(documents)
+                            }]
+                        }
+                    else:
+                        return {
+                            "answer": f"No documents found for {workgroup_name} workgroup.",
+                            "count": 0,
+                            "workgroup_id": str(workgroup_id),
+                            "workgroup_name": workgroup_name,
+                            "source": "Entity storage JSON files",
+                            "method": f"Entity query - no documents found for workgroup '{workgroup_name}'",
+                            "citations": [{
+                                "type": "data_source",
+                                "description": f"No documents found for workgroup {workgroup_name}",
+                                "method": "Entity query - workgroup filter"
+                            }]
+                        }
+                else:
+                    # Workgroup not found or not specified clearly
+                    workgroup_stats = self.get_meeting_statistics()
+                    workgroups = workgroup_stats.get("meetings_by_workgroup", {})
+                    
+                    return {
+                        "answer": f"Could not identify a specific workgroup from your question. There are {len(workgroups)} workgroups in the archive. Please specify the workgroup name (e.g., 'Governance', 'Archives') or use 'archive-rag query-workgroup <workgroup_id>' to find workgroup IDs.",
+                        "method": "Document listing - requires workgroup identification",
+                        "source": "Entity storage",
+                        "citations": [{
+                            "type": "info",
+                            "description": f"Found {len(workgroups)} workgroups. Documents are linked to meetings, which belong to workgroups.",
+                            "method": "Workgroup count from index"
+                        }]
+                    }
+            
+            # Check if filtering by meeting
+            if "meeting" in question_lower and "workgroup" not in question_lower:
+                # Try to extract meeting ID from question
+                import re
+                uuid_pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+                meeting_ids = re.findall(uuid_pattern, question_lower)
+                
+                if meeting_ids:
+                    try:
+                        meeting_id = UUID(meeting_ids[0])
+                        documents = entity_query.get_documents_by_meeting(meeting_id)
+                        
+                        if documents:
+                            doc_list = []
+                            for doc in documents:
+                                doc_list.append(f"  - {doc.title}: {doc.link}")
+                            
+                            answer = f"Found {len(documents)} document(s) for meeting {meeting_id}:\n" + "\n".join(doc_list)
+                            
+                            return {
+                                "answer": answer,
+                                "count": len(documents),
+                                "meeting_id": str(meeting_id),
+                                "documents": [{"title": doc.title, "link": str(doc.link)} for doc in documents],
+                                "source": "Entity storage JSON files",
+                                "method": f"Direct entity query - filtered by meeting {meeting_id}",
+                                "citations": [{
+                                    "type": "data_source",
+                                    "description": f"Listed {len(documents)} documents for meeting {meeting_id}",
+                                    "method": "Entity query - filtered by meeting",
+                                    "meeting_id": str(meeting_id),
+                                    "file_count": len(documents)
+                                }]
+                            }
+                        else:
+                            return {
+                                "answer": f"No documents found for meeting {meeting_id}.",
+                                "count": 0,
+                                "meeting_id": str(meeting_id),
+                                "source": "Entity storage JSON files",
+                                "method": f"Entity query - no documents found for meeting {meeting_id}",
+                                "citations": [{
+                                    "type": "data_source",
+                                    "description": f"No documents found for meeting {meeting_id}",
+                                    "method": "Entity query - meeting filter"
+                                }]
+                            }
+                    except ValueError:
+                        # Invalid UUID format, fall through to list all
+                        pass
+            
+            # List all documents
+            documents = entity_query.get_all_documents()
+            
+            # Format document list
+            if documents:
+                doc_list = []
+                for doc in documents[:20]:  # Limit to first 20 for answer
+                    doc_list.append(f"  - {doc.title}: {doc.link}")
+                
+                answer = f"Found {len(documents)} documents in the archive:\n" + "\n".join(doc_list)
+                if len(documents) > 20:
+                    answer += f"\n  ... and {len(documents) - 20} more documents"
+                
+                return {
+                    "answer": answer,
+                    "count": len(documents),
+                    "documents": [{"title": doc.title, "link": str(doc.link)} for doc in documents],
+                    "source": "Entity storage JSON files",
+                    "method": "Direct entity query from documents directory",
+                    "citations": [{
+                        "type": "data_source",
+                        "description": f"Listed {len(documents)} documents from entity storage",
+                        "method": "Entity query - scanned documents directory",
+                        "file_count": len(documents)
+                    }]
+                }
+            else:
+                return {
+                    "answer": "No documents found in the archive.",
+                    "count": 0,
+                    "source": "Entity storage JSON files",
+                    "method": "Entity query - no documents found",
+                    "citations": [{
+                        "type": "data_source",
+                        "description": "No documents found in entity storage",
+                        "method": "Directory scan"
+                    }]
+                }
+        
+        # Check for document count questions
+        if ("document" in question_lower or "documents" in question_lower) and ("how many" in question_lower or "count" in question_lower or "number" in question_lower):
             # Count documents from entity storage
             from src.lib.config import ENTITIES_DOCUMENTS_DIR
             documents_dir = ENTITIES_DOCUMENTS_DIR

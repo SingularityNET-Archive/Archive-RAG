@@ -293,6 +293,69 @@ class EntityQueryService:
             logger.error("query_documents_by_meeting_with_validation_failed", meeting_id=str(meeting_id), error=str(e))
             raise
     
+    def get_documents_by_workgroup(self, workgroup_id: UUID) -> List[Document]:
+        """
+        Get all documents for meetings in a specific workgroup.
+        
+        Args:
+            workgroup_id: UUID of workgroup
+            
+        Returns:
+            List of Document entities for all meetings in the workgroup
+            
+        Raises:
+            ValueError: If entity loading fails
+        """
+        logger.info("query_documents_by_workgroup_start", workgroup_id=str(workgroup_id))
+        
+        try:
+            # First, get all meetings for this workgroup
+            meetings = self.get_meetings_by_workgroup(workgroup_id)
+            
+            # Then, get all documents for each meeting
+            documents = []
+            for meeting in meetings:
+                meeting_docs = self.get_documents_by_meeting(meeting.id)
+                documents.extend(meeting_docs)
+            
+            logger.info("query_documents_by_workgroup_success", workgroup_id=str(workgroup_id), document_count=len(documents))
+            return documents
+            
+        except Exception as e:
+            logger.error("query_documents_by_workgroup_failed", workgroup_id=str(workgroup_id), error=str(e))
+            raise
+    
+    def get_all_documents(self) -> List[Document]:
+        """
+        Get all documents in the archive.
+        
+        Returns:
+            List of all Document entities
+            
+        Raises:
+            ValueError: If entity loading fails
+        """
+        logger.info("query_all_documents_start")
+        
+        try:
+            documents = []
+            for document_file in ENTITIES_DOCUMENTS_DIR.glob("*.json"):
+                try:
+                    document_id = UUID(document_file.stem)
+                    document = load_entity(document_id, ENTITIES_DOCUMENTS_DIR, Document)
+                    if document:
+                        documents.append(document)
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_all_documents_loading_failed", document_id=document_file.stem, error=str(e))
+                    continue
+            
+            logger.info("query_all_documents_success", document_count=len(documents))
+            return documents
+            
+        except Exception as e:
+            logger.error("query_all_documents_failed", error=str(e))
+            raise
+    
     def get_decision_items_by_agenda_item(self, agenda_item_id: UUID) -> List[DecisionItem]:
         """
         Get all decision items for a specific agenda item.
