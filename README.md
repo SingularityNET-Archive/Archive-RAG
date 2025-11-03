@@ -92,6 +92,178 @@ This project adheres to the Archive-RAG Constitution:
 
 See [.specify/memory/constitution.md](.specify/memory/constitution.md) for details.
 
+## Entity Extraction
+
+The Archive-RAG system automatically extracts structured entities from meeting records during ingestion, creating a relational entity-based data model for efficient querying and relationship navigation.
+
+### Overview
+
+When you ingest meetings, the system automatically extracts and saves the following entities:
+- **Meetings**: 120 meetings extracted
+- **Workgroups**: 30 workgroups
+- **People**: 136 people (hosts, documenters, participants)
+- **Documents**: 380 documents (working docs from meetings)
+- **Agenda Items**: Extracted from meeting records
+- **Decision Items**: 234 decisions
+- **Action Items**: Extracted from agenda items
+
+### How Entity Extraction Works
+
+When you ingest meetings using `archive-rag ingest-entities`, the system:
+
+1. **Parses meeting records** from JSON source files
+2. **Extracts and creates entities** for meetings, workgroups, people, documents, agenda items, decisions, and action items
+3. **Establishes relationships** between entities (e.g., meetings belong to workgroups, documents belong to meetings)
+4. **Saves entities** to JSON files in `entities/` directory structure
+5. **Maintains referential integrity** with foreign key validation
+
+All entities are stored locally as JSON files, enabling fast queries and relationship traversal without database dependencies.
+
+### Extracted Entities
+
+The following entities are automatically extracted and stored:
+
+#### 1. **Meetings** (`entities/meetings/`)
+- **Source**: Meeting records with `workgroup_id`, `date`, `meetingInfo`
+- **Fields**: `id`, `workgroup_id`, `meeting_type`, `date`, `host_id`, `documenter_id`, `purpose`, `video_link`, `timestamped_video`
+- **Relationships**: Belongs to Workgroup, has many Documents/AgendaItems
+- **Example Queries**:
+  ```bash
+  # Count meetings
+  archive-rag query indexes/sample-meetings.faiss "How many meetings are there?"
+  
+  # Query meetings by workgroup
+  archive-rag query-workgroup <workgroup_id>
+  
+  # Query specific meeting
+  archive-rag query-meeting <meeting_id> --documents --decisions
+  ```
+
+#### 2. **Workgroups** (`entities/workgroups/`)
+- **Source**: Workgroup information from `workgroup_id` and `workgroup` fields
+- **Fields**: `id`, `name`
+- **Relationships**: Has many Meetings
+- **Example Queries**:
+  ```bash
+  # Count workgroups
+  archive-rag query indexes/sample-meetings.faiss "How many workgroups are there?"
+  
+  # List meetings for a workgroup
+  archive-rag query-workgroup <workgroup_id>
+  ```
+
+#### 3. **People** (`entities/people/`)
+- **Source**: Host, documenter, and participants from `meetingInfo`
+- **Fields**: `id`, `display_name`, `alias`, `role`
+- **Relationships**: Assigned to ActionItems, attends Meetings (via MeetingPerson)
+- **Example Queries**:
+  ```bash
+  # Count people
+  archive-rag query indexes/sample-meetings.faiss "How many people participated in meetings?"
+  
+  # Query person and their action items
+  archive-rag query-person <person_id> --action-items
+  ```
+
+#### 4. **Documents** (`entities/documents/`)
+- **Source**: `meetingInfo.workingDocs` array
+- **Fields**: `id`, `meeting_id`, `title`, `link`
+- **Relationships**: Belongs to Meeting
+- **Example Queries**:
+  ```bash
+  # Count documents
+  archive-rag query indexes/sample-meetings.faiss "How many documents are there?"
+  
+  # List all documents
+  archive-rag query indexes/sample-meetings.faiss "List all documents"
+  
+  # List documents by workgroup
+  archive-rag query indexes/sample-meetings.faiss "List documents for Governance workgroup"
+  archive-rag query indexes/sample-meetings.faiss "Show documents for Archives workgroup"
+  ```
+
+#### 5. **Agenda Items** (`entities/agenda_items/`)
+- **Source**: `agendaItems` array in meeting records
+- **Fields**: `id`, `meeting_id`, `status`, `narrative`
+- **Relationships**: Belongs to Meeting, has many DecisionItems/ActionItems
+- **Example Queries**:
+  ```bash
+  # Query agenda items via meeting
+  archive-rag query-meeting <meeting_id>
+  ```
+
+#### 6. **Decision Items** (`entities/decision_items/`)
+- **Source**: `agendaItems[].decisionItems` array
+- **Fields**: `id`, `agenda_item_id`, `decision`, `rationale`, `effect`
+- **Relationships**: Belongs to AgendaItem
+- **Example Queries**:
+  ```bash
+  # Count decisions
+  archive-rag query indexes/sample-meetings.faiss "How many decisions were made from all workgroups?"
+  
+  # Query decisions by text
+  archive-rag query-decisions indexes/sample-meetings.faiss "budget allocation"
+  
+  # Query decisions for a meeting
+  archive-rag query-meeting <meeting_id> --decisions
+  ```
+
+#### 7. **Action Items** (`entities/action_items/`)
+- **Source**: `agendaItems[].actionItems` array
+- **Fields**: `id`, `agenda_item_id`, `text`, `assignee_id`, `due_date`, `status`
+- **Relationships**: Belongs to AgendaItem, assigned to Person
+- **Example Queries**:
+  ```bash
+  # Query action items for a person
+  archive-rag query-person <person_id> --action-items
+  ```
+
+### Entity Storage Structure
+
+```
+entities/
+├── workgroups/          # Workgroup entities (30 workgroups)
+├── meetings/            # Meeting entities (120 meetings)
+├── people/              # Person entities (136 people)
+├── documents/           # Document entities (380 documents)
+├── agenda_items/        # Agenda item entities
+├── decision_items/      # Decision item entities (234 decisions)
+├── action_items/        # Action item entities
+├── _index/              # Index files for fast lookups
+│   └── meetings_by_workgroup.json
+└── _relations/          # Junction tables for many-to-many relationships
+```
+
+### Ingesting Entities
+
+To extract and save entities from meeting records:
+
+```bash
+# Ingest from URL
+archive-rag ingest-entities "https://raw.githubusercontent.com/.../meeting-summaries-array.json"
+
+# This will:
+# - Extract all meetings, workgroups, people, documents, agenda items, decisions, and action items
+# - Save them to entities/ directory
+# - Create relationships between entities
+# - Generate index files for fast queries
+```
+
+### Query Capabilities
+
+The system supports both:
+
+1. **Quantitative Queries**: Direct counts and statistics from entity storage
+   - "How many meetings are there?"
+   - "How many decisions were made?"
+   - "List all documents for Governance workgroup"
+
+2. **Qualitative RAG Queries**: Semantic search and LLM-based answers
+   - "What decisions were made about budget allocation?"
+   - "What topics were discussed in recent meetings?"
+
+All queries include proper citations with data sources and calculation methods.
+
 ## Requirements
 
 - Python 3.11+ (tested with Python 3.11, 3.12, and 3.13)
