@@ -114,22 +114,116 @@ class QueryService:
                 if 'meeting_id' not in chunk:
                     logger.warning("rag_query_chunk_missing_meeting_id", chunk=chunk)
             
-            # Check evidence
-            evidence_found = check_evidence(retrieved_chunks)
-            
-            # Generate answer
+            # Initialize RAG generator (needed for all paths)
             rag_generator = create_rag_generator(
                 model_name=self.model_name,
                 seed=self.seed
             )
             
-            if evidence_found:
-                answer = rag_generator.generate(query_text, retrieved_chunks)
+            # Check if this is a quantitative question requiring direct data access
+            from ..services.quantitative_query import create_quantitative_query_service
+            quantitative_service = create_quantitative_query_service()
+            
+            # Detect quantitative questions
+            query_lower = query_text.lower()
+            is_quantitative = any(phrase in query_lower for phrase in [
+                "how many meetings", "count meetings", "number of meetings",
+                "how many", "count the", "total number"
+            ])
+            
+            if is_quantitative:
+                # Use quantitative query service for accurate counts
+                logger.info("quantitative_query_detected", query=query_text)
+                
+                # Try to extract source URL from question
+                import re
+                url_pattern = r'https?://[^\s<>"{}|\\^`\[\]?]+'
+                urls = re.findall(url_pattern, query_text)
+                source_url = urls[0] if urls else None
+                # Remove trailing ? if present
+                if source_url and source_url.endswith('?'):
+                    source_url = source_url[:-1]
+                
+                quantitative_result = quantitative_service.answer_quantitative_question(query_text, source_url=source_url)
+                
+                if "count" in quantitative_result:
+                    # Build answer with citations
+                    answer = quantitative_result["answer"]
+                    
+                    # Add unique count info if different from total
+                    unique_count = quantitative_result.get("unique_count")
+                    count = quantitative_result.get("count", 0)
+                    if unique_count and unique_count != count:
+                        answer += f"\n\n**Note:** The source JSON array contains {count} total entries, but {unique_count} unique meetings (based on workgroup_id + date combinations)."
+                    
+                    citations_text = "\n".join([
+                        f"- {cit.get('description', 'Data source')}: {cit.get('file_count', 'N/A') if cit.get('file_count') else cit.get('url', 'N/A')}"
+                        for cit in quantitative_result.get("citations", [])
+                    ])
+                    
+                    # Include method and source in answer
+                    answer = f"{answer}\n\n**Data Source:** {quantitative_result['source']}\n**Method:** {quantitative_result['method']}\n\n**Verification:**\n{citations_text}"
+                    
+                    # Use quantitative result as evidence
+                    evidence_found = True
+                    
+                    # Create proper chunk structure for citation
+                    # Use first retrieved chunk if available, otherwise create minimal structure
+                    if not retrieved_chunks:
+                        retrieved_chunks = [{
+                            "text": f"Quantitative analysis: {quantitative_result.get('count', 0)} meetings found in entity storage",
+                            "meeting_id": "quantitative-query",
+                            "chunk_index": 0,
+                            "source": quantitative_result["source"],
+                            "score": 1.0
+                        }]
+                    else:
+                        # Add quantitative info to existing chunks
+                        for chunk in retrieved_chunks:
+                            chunk["quantitative_analysis"] = {
+                                "count": quantitative_result.get('count', 0),
+                                "method": quantitative_result.get('method', ''),
+                                "source": quantitative_result.get('source', '')
+                            }
+                else:
+                    # Fall back to RAG if quantitative query doesn't handle it
+                    evidence_found = check_evidence(retrieved_chunks)
+                    if evidence_found:
+                        answer = rag_generator.generate(query_text, retrieved_chunks)
+                    else:
+                        answer = get_no_evidence_message()
             else:
-                answer = get_no_evidence_message()
+                # Standard RAG query
+                evidence_found = check_evidence(retrieved_chunks)
+                
+                if evidence_found:
+                    answer = rag_generator.generate(query_text, retrieved_chunks)
+                else:
+                    answer = get_no_evidence_message()
             
             # Extract citations
-            citations = extract_citations(retrieved_chunks)
+            # For quantitative queries, add data source citations
+            if is_quantitative and "count" in quantitative_result:
+                from ..models.rag_query import Citation
+                citations = []
+                # Add citation for quantitative analysis with proper format
+                count = quantitative_result.get('count', 0)
+                source = quantitative_result.get('source', 'entity storage')
+                method = quantitative_result.get('method', 'Direct file count')
+                
+                # Create citation showing the counting process
+                citations.append(Citation(
+                    meeting_id="entity-storage",
+                    date=datetime.utcnow().strftime("%Y-%m-%d"),
+                    speaker="System",
+                    excerpt=f"Counted {count} meetings by scanning JSON files in {source}. Method: {method}."
+                ))
+                
+                # Also include any existing retrieved chunks as additional context
+                existing_citations = extract_citations(retrieved_chunks)
+                citations.extend(existing_citations)
+            else:
+                citations = extract_citations(retrieved_chunks)
             
             # Create RAGQuery model
             rag_query = RAGQuery(

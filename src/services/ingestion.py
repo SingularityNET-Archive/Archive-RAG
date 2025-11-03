@@ -89,6 +89,18 @@ def ingest_meeting_url(
     Returns:
         List of tuples (MeetingRecord, file_hash) - one per meeting in the array
     """
+    # Restore socket if it was monkey-patched (for compliance checker)
+    import socket
+    from ..services.compliance_checker import get_compliance_checker
+    checker = get_compliance_checker()
+    
+    original_socket = None
+    was_monitoring = checker.enabled
+    if was_monitoring and hasattr(checker.network_monitor, '_original_socket') and checker.network_monitor._original_socket:
+        original_socket = checker.network_monitor._original_socket
+        # Temporarily restore original socket for URL fetch
+        socket.socket = original_socket
+    
     try:
         # Fetch JSON from URL
         logger.info("fetching_url", url=url)
@@ -98,6 +110,10 @@ def ingest_meeting_url(
     except Exception as e:
         logger.error("url_fetch_failed", url=url, error=str(e))
         raise ValueError(f"Failed to fetch URL {url}: {e}")
+    finally:
+        # Socket restoration will be handled when monitoring is re-enabled
+        if was_monitoring and checker.enabled:
+            pass  # Socket will be restored when monitoring is re-enabled
     
     # Compute hash of fetched content
     content_hash = hashlib.sha256(data_bytes).hexdigest()

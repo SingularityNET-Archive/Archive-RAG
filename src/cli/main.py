@@ -11,6 +11,7 @@ from .topic_model import topic_model_command
 from .extract_entities import extract_entities_command
 from .evaluate import evaluate_command
 from .compliance import check_compliance_command
+from .ingest_entities import ingest_entities_command
 
 app = typer.Typer(
     name="archive-rag",
@@ -226,6 +227,15 @@ def check_compliance(
         output_format=output_format,
         report_file=report_file
     )
+
+
+@app.command()
+def ingest_entities(
+    source_url: str = typer.Argument(..., help="URL to source JSON file containing meetings"),
+    verify_hash: Optional[str] = typer.Option(None, "--verify-hash", help="Optional SHA-256 hash to verify source file integrity")
+):
+    """Ingest meetings from source URL and save to entity storage."""
+    ingest_entities_command(source_url=source_url, verify_hash=verify_hash)
 
 
 @app.command()
