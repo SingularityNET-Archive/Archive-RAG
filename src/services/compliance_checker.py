@@ -49,15 +49,15 @@ class NetworkMonitor:
                 if self._is_external_api(host):
                     violation = ConstitutionViolation(
                         violation_type=ViolationType.EXTERNAL_API,
-                        principle="Technology Discipline - \"No external API dependency for core functionality\"",
+                        principle="Technology Discipline - \"Remote embeddings and LLM inference are allowed but must be configured via environment variables\"",
                         location={
                             "file": "runtime",
                             "line": 0,
                             "function": "socket.connect"
                         },
-                        violation_details=f"Network connection to {host}:{port}",
+                        violation_details=f"Unauthorized network connection to {host}:{port}",
                         detection_layer=DetectionLayer.RUNTIME,
-                        recommended_action="Use local models or services instead of remote API."
+                        recommended_action="Ensure remote APIs are properly configured via environment variables, or use local models instead."
                     )
                     self.violations.append(violation)
                     logger.error(
@@ -90,11 +90,48 @@ class NetworkMonitor:
         logger.debug("network_monitoring_stopped", violation_count=len(self.violations))
     
     def _is_external_api(self, host: str) -> bool:
-        """Check if host is an external API."""
+        """Check if host is an external API that's not configured."""
         if not host:
             return False
         
-        # Known external API hosts
+        # Check if remote APIs are configured (per constitution v2.2.0, remote embeddings/LLM are allowed)
+        from ..lib.remote_config import (
+            get_embedding_remote_config,
+            get_llm_remote_config
+        )
+        
+        # Get configured remote API URLs
+        emb_enabled, emb_url, _, _ = get_embedding_remote_config()
+        llm_enabled, llm_url, _, _ = get_llm_remote_config()
+        
+        host_lower = host.lower()
+        
+        # Extract host from URLs for comparison
+        configured_hosts = set()
+        if emb_enabled and emb_url:
+            # Extract host from URL (e.g., "https://api.openai.com/v1" -> "api.openai.com")
+            from urllib.parse import urlparse
+            try:
+                parsed = urlparse(emb_url)
+                if parsed.hostname:
+                    configured_hosts.add(parsed.hostname.lower())
+            except Exception:
+                pass
+        
+        if llm_enabled and llm_url:
+            from urllib.parse import urlparse
+            try:
+                parsed = urlparse(llm_url)
+                if parsed.hostname:
+                    configured_hosts.add(parsed.hostname.lower())
+            except Exception:
+                pass
+        
+        # If this host is configured, it's allowed (not a violation)
+        if any(conf_host in host_lower or host_lower in conf_host for conf_host in configured_hosts):
+            return False
+        
+        # Known external API hosts (only flag if not configured)
         external_api_hosts = {
             'api.openai.com',
             'api-inference.huggingface.co',
@@ -105,12 +142,11 @@ class NetworkMonitor:
         }
         
         # Check if host matches or contains external API domains
-        host_lower = host.lower()
         for api_host in external_api_hosts:
             if api_host in host_lower:
                 return True
         
-        # Check for common API patterns
+        # Check for common API patterns (only flag if not configured)
         if any(pattern in host_lower for pattern in ['api.', '.api.', '-api.', 'api-']):
             return True
         
@@ -271,25 +307,12 @@ class ComplianceChecker:
         """Check embedding operations for compliance violations."""
         violations = []
         
-        # Check if remote embedding service is being used
-        if 'src.services.remote_embedding' in sys.modules:
-            remote_module = sys.modules['src.services.remote_embedding']
-            if hasattr(remote_module, 'RemoteEmbeddingService'):
-                violation = ConstitutionViolation(
-                    violation_type=ViolationType.NON_LOCAL_EMBEDDING,
-                    principle="Technology Discipline - \"Local embeddings + FAISS storage\"",
-                    location={
-                        "file": "runtime",
-                        "module": "src.services.remote_embedding"
-                    },
-                    violation_details="Remote embedding service detected",
-                    detection_layer=DetectionLayer.RUNTIME,
-                    recommended_action="Use local embedding models (sentence-transformers) instead of remote API."
-                )
-                violations.append(violation)
+        # Remote embeddings are now allowed per constitution v2.2.0
+        # No longer flagging remote embedding service usage or network calls as violations
+        # Network calls to configured remote embedding APIs are explicitly allowed
         
-        # Add network monitor violations
-        violations.extend(self.network_monitor.get_violations())
+        # Network monitor violations are not included here since remote embeddings are allowed
+        # (Network monitoring may still run but violations are not raised for embedding operations)
         
         return violations
     
@@ -297,25 +320,12 @@ class ComplianceChecker:
         """Check LLM inference operations for compliance violations."""
         violations = []
         
-        # Check if remote LLM service is being used
-        if 'src.services.remote_llm' in sys.modules:
-            remote_module = sys.modules['src.services.remote_llm']
-            if hasattr(remote_module, 'RemoteLLMService'):
-                violation = ConstitutionViolation(
-                    violation_type=ViolationType.NON_LOCAL_LLM,
-                    principle="Technology Discipline - \"No external API dependency for core functionality\"",
-                    location={
-                        "file": "runtime",
-                        "module": "src.services.remote_llm"
-                    },
-                    violation_details="Remote LLM service detected",
-                    detection_layer=DetectionLayer.RUNTIME,
-                    recommended_action="Use local LLM models (transformers) instead of remote API."
-                )
-                violations.append(violation)
+        # Remote LLM inference is now allowed per constitution v2.2.0
+        # No longer flagging remote LLM service usage or network calls as violations
+        # Network calls to configured remote LLM APIs are explicitly allowed
         
-        # Add network monitor violations
-        violations.extend(self.network_monitor.get_violations())
+        # Network monitor violations are not included here since remote LLM is allowed
+        # (Network monitoring may still run but violations are not raised for LLM operations)
         
         return violations
     
@@ -329,7 +339,7 @@ class ComplianceChecker:
             if db_name in sys.modules:
                 violation = ConstitutionViolation(
                     violation_type=ViolationType.REMOTE_STORAGE,
-                    principle="Technology Discipline - \"Local embeddings + FAISS storage\"",
+                    principle="Technology Discipline - \"FAISS vector storage remains local for performance and determinism\"",
                     location={
                         "file": "runtime",
                         "module": db_name

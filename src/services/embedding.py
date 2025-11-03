@@ -108,17 +108,23 @@ class EmbeddingService:
                     raise violations[0]
                 return result
             except Exception as e:
+                # Get the actual remote model name from the remote service
+                remote_model_name = getattr(self._remote_service, 'model_name', self.model_name)
+                remote_api_url = getattr(self._remote_service, 'api_url', 'unknown')
+                
                 logger.error(
                     "remote_embedding_failed",
                     error=str(e),
-                    model=self.model_name,
-                    api_url=getattr(self._remote_service, 'api_url', 'unknown')
+                    local_model=self.model_name,
+                    remote_model=remote_model_name,
+                    api_url=remote_api_url
                 )
                 raise RuntimeError(
                     f"Remote embedding failed: {e}\n"
-                    f"Model: {self.model_name}\n"
-                    f"Check your API configuration and ensure the model supports feature extraction. "
-                    f"To use local embeddings instead, disable remote processing in your .env file."
+                    f"  Remote Model: {remote_model_name}\n"
+                    f"  API URL: {remote_api_url}\n"
+                    f"  Check your API configuration and ensure the model supports feature extraction.\n"
+                    f"  To use local embeddings instead, disable remote processing in your .env file."
                 ) from e
         
         # Use local embedding service

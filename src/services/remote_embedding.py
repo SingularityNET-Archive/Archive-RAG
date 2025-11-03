@@ -89,8 +89,15 @@ class RemoteEmbeddingService:
     def _embed_openai(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
         """Generate embeddings using OpenAI API."""
         import openai
+        import time
         
-        client = openai.OpenAI(api_key=self.api_key, base_url=self.api_url or None)
+        # Create client with longer timeout for connection issues
+        client = openai.OpenAI(
+            api_key=self.api_key,
+            base_url=self.api_url or None,
+            timeout=120.0,  # 2 minute timeout for slow connections
+            max_retries=3  # Retry up to 3 times on transient errors
+        )
         
         # Process in batches
         all_embeddings = []
@@ -104,19 +111,81 @@ class RemoteEmbeddingService:
                 )
                 batch_embeddings = [item.embedding for item in response.data]
                 all_embeddings.extend(batch_embeddings)
-            except Exception as e:
+            except openai.APIConnectionError as e:
+                # Connection errors (network issues, DNS, SSL, etc.)
+                error_msg = (
+                    f"OpenAI API connection failed: {e}\n"
+                    f"  API URL: {self.api_url}\n"
+                    f"  Model: {self.model_name}\n"
+                    f"  Troubleshooting:\n"
+                    f"    - Check internet connectivity\n"
+                    f"    - Verify API URL is correct: {self.api_url}\n"
+                    f"    - Check firewall/proxy settings\n"
+                    f"    - Verify API key is valid (starts with 'sk-')\n"
+                    f"    - Ensure model '{self.model_name}' is valid for OpenAI API\n"
+                    f"    - For OpenAI, use models like 'text-embedding-3-small' or 'text-embedding-3-large'"
+                )
+                logger.error("openai_embedding_connection_failed", 
+                           error=str(e), 
+                           api_url=self.api_url,
+                           model=self.model_name,
+                           api_key_present=bool(self.api_key))
+                raise RuntimeError(error_msg) from e
+            except openai.APIError as e:
+                # API errors (authentication, rate limits, etc.)
                 error_str = str(e)
-                # Check for quota errors (429) and log as warning instead of error
-                if "429" in error_str or "insufficient_quota" in error_str.lower() or "quota" in error_str.lower():
+                status_code = getattr(e, 'status_code', None)
+                
+                # Check for quota errors (429)
+                if status_code == 429 or "429" in error_str or "insufficient_quota" in error_str.lower() or "quota" in error_str.lower():
                     logger.warning(
                         "openai_embedding_quota_exceeded",
                         error=error_str,
                         batch_size=len(batch),
-                        suggestion="OpenAI quota exceeded for embeddings. Consider checking billing or using local embeddings."
+                        status_code=status_code,
+                        suggestion="OpenAI quota exceeded for embeddings. Check billing or usage limits."
                     )
+                # Check for authentication errors (401)
+                elif status_code == 401 or "401" in error_str or "unauthorized" in error_str.lower() or "invalid api key" in error_str.lower():
+                    error_msg = (
+                        f"OpenAI API authentication failed: {e}\n"
+                        f"  API URL: {self.api_url}\n"
+                        f"  Troubleshooting:\n"
+                        f"    - Verify API key is correct and active\n"
+                        f"    - Check API key format (should start with 'sk-')\n"
+                        f"    - Ensure API key has permissions for embeddings API\n"
+                        f"    - Check OpenAI account status and billing"
+                    )
+                    logger.error("openai_embedding_auth_failed", 
+                               error=error_str,
+                               api_url=self.api_url,
+                               api_key_present=bool(self.api_key),
+                               status_code=status_code)
+                    raise RuntimeError(error_msg) from e
                 else:
-                    logger.error("openai_embedding_failed", error=error_str, batch_size=len(batch))
+                    logger.error("openai_embedding_api_failed", 
+                               error=error_str, 
+                               batch_size=len(batch),
+                               status_code=status_code,
+                               model=self.model_name)
                 raise
+            except Exception as e:
+                # Other unexpected errors
+                error_str = str(e)
+                error_type = type(e).__name__
+                error_msg = (
+                    f"Unexpected error during OpenAI embedding: {error_type}: {error_str}\n"
+                    f"  API URL: {self.api_url}\n"
+                    f"  Model: {self.model_name}\n"
+                    f"  Batch size: {len(batch)}"
+                )
+                logger.error("openai_embedding_unexpected_error", 
+                           error=error_str,
+                           error_type=error_type,
+                           api_url=self.api_url,
+                           model=self.model_name,
+                           batch_size=len(batch))
+                raise RuntimeError(error_msg) from e
         
         # Determine dimension from first embedding
         if all_embeddings:
