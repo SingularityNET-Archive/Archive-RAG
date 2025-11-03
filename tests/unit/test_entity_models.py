@@ -12,6 +12,7 @@ from src.models.agenda_item import AgendaItem, AgendaItemStatus
 from src.models.action_item import ActionItem, ActionItemStatus
 from src.models.document import Document
 from src.models.decision_item import DecisionItem, DecisionEffect
+from src.models.tag import Tag
 
 
 class TestWorkgroupModel:
@@ -516,4 +517,99 @@ class TestDecisionItemModel:
             decision="Custom decision"
         )
         assert decision_item.id == custom_id
+
+
+class TestTagModel:
+    """Unit tests for Tag model validation."""
+    
+    @pytest.fixture
+    def meeting_id(self):
+        """Fixture for meeting UUID."""
+        return uuid4()
+    
+    def test_tag_creation_valid(self, meeting_id):
+        """Test creating a valid tag."""
+        tag = Tag(
+            meeting_id=meeting_id,
+            topics_covered=["budget", "planning"],
+            emotions=["collaborative", "friendly"]
+        )
+        assert tag.meeting_id == meeting_id
+        assert tag.topics_covered == ["budget", "planning"]
+        assert tag.emotions == ["collaborative", "friendly"]
+        assert isinstance(tag.id, UUID)
+        assert tag.created_at is not None
+        assert tag.updated_at is not None
+    
+    def test_tag_meeting_id_required(self):
+        """Test meeting_id is required."""
+        with pytest.raises(ValidationError) as exc_info:
+            Tag(topics_covered=["budget"])
+        assert "meeting_id" in str(exc_info.value)
+    
+    def test_tag_with_string_topics(self, meeting_id):
+        """Test tag with string topics_covered."""
+        tag = Tag(
+            meeting_id=meeting_id,
+            topics_covered="budget, planning, strategy"
+        )
+        assert tag.topics_covered == "budget, planning, strategy"
+    
+    def test_tag_with_list_topics(self, meeting_id):
+        """Test tag with list topics_covered."""
+        tag = Tag(
+            meeting_id=meeting_id,
+            topics_covered=["budget", "planning", "strategy"]
+        )
+        assert tag.topics_covered == ["budget", "planning", "strategy"]
+    
+    def test_tag_with_string_emotions(self, meeting_id):
+        """Test tag with string emotions."""
+        tag = Tag(
+            meeting_id=meeting_id,
+            emotions="collaborative, friendly"
+        )
+        assert tag.emotions == "collaborative, friendly"
+    
+    def test_tag_with_list_emotions(self, meeting_id):
+        """Test tag with list emotions."""
+        tag = Tag(
+            meeting_id=meeting_id,
+            emotions=["collaborative", "friendly", "energetic"]
+        )
+        assert tag.emotions == ["collaborative", "friendly", "energetic"]
+    
+    def test_tag_optional_fields(self, meeting_id):
+        """Test tag with optional fields."""
+        tag = Tag(meeting_id=meeting_id)
+        assert tag.topics_covered is None
+        assert tag.emotions is None
+    
+    def test_tag_topics_only(self, meeting_id):
+        """Test tag with only topics."""
+        tag = Tag(
+            meeting_id=meeting_id,
+            topics_covered=["budget"]
+        )
+        assert tag.topics_covered == ["budget"]
+        assert tag.emotions is None
+    
+    def test_tag_emotions_only(self, meeting_id):
+        """Test tag with only emotions."""
+        tag = Tag(
+            meeting_id=meeting_id,
+            emotions=["collaborative"]
+        )
+        assert tag.emotions == ["collaborative"]
+        assert tag.topics_covered is None
+    
+    def test_tag_with_custom_id(self, meeting_id):
+        """Test creating tag with custom UUID."""
+        custom_id = uuid4()
+        tag = Tag(
+            id=custom_id,
+            meeting_id=meeting_id,
+            topics_covered=["budget"]
+        )
+        assert tag.id == custom_id
 

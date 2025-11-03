@@ -29,6 +29,7 @@ from src.models.agenda_item import AgendaItem
 from src.models.action_item import ActionItem
 from src.models.document import Document
 from src.models.decision_item import DecisionItem
+from src.models.tag import Tag
 
 T = TypeVar("T", bound=BaseEntity)
 
@@ -412,4 +413,27 @@ def save_document(document: Document) -> None:
     
     # Save document entity
     save_entity(document, ENTITIES_DOCUMENTS_DIR)
+
+
+def save_tag(tag: Tag) -> None:
+    """
+    Save tag entity to JSON file.
+    
+    Args:
+        tag: Tag entity instance
+    
+    Raises:
+        ValueError: If tag validation fails or meeting doesn't exist
+        IOError: If file write fails
+    """
+    # Validate meeting_id foreign key exists
+    validate_foreign_key(
+        tag.meeting_id,
+        ENTITIES_MEETINGS_DIR,
+        Meeting,
+        foreign_key_name="meeting_id"
+    )
+    
+    # Save tag entity
+    save_entity(tag, ENTITIES_TAGS_DIR)
 

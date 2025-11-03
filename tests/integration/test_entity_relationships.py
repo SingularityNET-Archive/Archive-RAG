@@ -11,6 +11,7 @@ from src.models.agenda_item import AgendaItem
 from src.models.action_item import ActionItem, ActionItemStatus
 from src.models.document import Document
 from src.models.decision_item import DecisionItem, DecisionEffect
+from src.models.tag import Tag
 from src.services.entity_storage import (
     save_workgroup,
     save_meeting,
@@ -19,6 +20,7 @@ from src.services.entity_storage import (
     save_action_item,
     save_document,
     save_decision_item,
+    save_tag,
     load_entity,
     init_entity_storage_directories
 )
@@ -31,6 +33,7 @@ from src.lib.config import (
     ENTITIES_AGENDA_ITEMS_DIR,
     ENTITIES_ACTION_ITEMS_DIR,
     ENTITIES_DECISION_ITEMS_DIR,
+    ENTITIES_TAGS_DIR,
     ENTITIES_INDEX_DIR
 )
 
@@ -51,6 +54,7 @@ class TestEntityRelationships:
         lib.config.ENTITIES_AGENDA_ITEMS_DIR = lib.config.ENTITIES_DIR / "agenda_items"
         lib.config.ENTITIES_ACTION_ITEMS_DIR = lib.config.ENTITIES_DIR / "action_items"
         lib.config.ENTITIES_DECISION_ITEMS_DIR = lib.config.ENTITIES_DIR / "decision_items"
+        lib.config.ENTITIES_TAGS_DIR = lib.config.ENTITIES_DIR / "tags"
         lib.config.ENTITIES_INDEX_DIR = lib.config.ENTITIES_DIR / "_index"
         
         # Initialize storage directories
@@ -554,4 +558,114 @@ class TestEntityRelationships:
             )
             assert matching_decision.decision == original_text
             assert len(matching_decision.decision) == len(original_text)
+    
+    def test_query_meetings_by_tag(self):
+        """Test querying meetings by tag - integration test for US5."""
+        # Create workgroup and meetings
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting1 = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        meeting2 = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-04-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        meeting3 = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-05-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        save_meeting(meeting1)
+        save_meeting(meeting2)
+        save_meeting(meeting3)
+        
+        # Create tags for meetings
+        tag1 = Tag(
+            meeting_id=meeting1.id,
+            topics_covered=["budget", "planning"],
+            emotions=["collaborative"]
+        )
+        tag2 = Tag(
+            meeting_id=meeting2.id,
+            topics_covered=["strategy", "planning"],
+            emotions=["friendly"]
+        )
+        tag3 = Tag(
+            meeting_id=meeting3.id,
+            topics_covered=["budget"],
+            emotions=["energetic"]
+        )
+        # Meeting 3 has no tag - should be excluded from tag-based queries
+        
+        save_tag(tag1)
+        save_tag(tag2)
+        save_tag(tag3)
+        
+        # Query meetings by tag
+        query_service = EntityQueryService()
+        meetings_with_budget = query_service.get_meetings_by_tag("budget", tag_type="topics")
+        meetings_with_planning = query_service.get_meetings_by_tag("planning", tag_type="topics")
+        meetings_with_collaborative = query_service.get_meetings_by_tag("collaborative", tag_type="emotions")
+        
+        # Verify correct meetings are returned
+        assert len(meetings_with_budget) == 2  # meeting1 and meeting3
+        assert len(meetings_with_planning) == 2  # meeting1 and meeting2
+        assert len(meetings_with_collaborative) == 1  # meeting1
+        
+        # Verify meeting IDs
+        budget_meeting_ids = {m.id for m in meetings_with_budget}
+        assert meeting1.id in budget_meeting_ids
+        assert meeting3.id in budget_meeting_ids
+        assert meeting2.id not in budget_meeting_ids
+        
+        planning_meeting_ids = {m.id for m in meetings_with_planning}
+        assert meeting1.id in planning_meeting_ids
+        assert meeting2.id in planning_meeting_ids
+        assert meeting3.id not in planning_meeting_ids
+        
+        # Verify untagged meetings are excluded
+        collaborative_meeting_ids = {m.id for m in meetings_with_collaborative}
+        assert meeting1.id in collaborative_meeting_ids
+        assert meeting2.id not in collaborative_meeting_ids
+        assert meeting3.id not in collaborative_meeting_ids
+    
+    def test_query_meetings_by_tag_string_format(self):
+        """Test querying meetings by tag with string format (comma-separated)."""
+        # Create workgroup and meeting
+        workgroup = Workgroup(name="Test Workgroup")
+        save_workgroup(workgroup)
+        
+        meeting = Meeting(
+            workgroup_id=workgroup.id,
+            date="2024-03-15",
+            meeting_type=MeetingType.MONTHLY
+        )
+        save_meeting(meeting)
+        
+        # Create tag with string format (comma-separated)
+        tag = Tag(
+            meeting_id=meeting.id,
+            topics_covered="budget, planning, strategy",
+            emotions="collaborative, friendly"
+        )
+        save_tag(tag)
+        
+        # Query meetings by tag
+        query_service = EntityQueryService()
+        meetings_with_budget = query_service.get_meetings_by_tag("budget", tag_type="topics")
+        meetings_with_planning = query_service.get_meetings_by_tag("planning", tag_type="topics")
+        meetings_with_collaborative = query_service.get_meetings_by_tag("collaborative", tag_type="emotions")
+        
+        # Verify meetings are found with string format
+        assert len(meetings_with_budget) == 1
+        assert len(meetings_with_planning) == 1
+        assert len(meetings_with_collaborative) == 1
+        assert meetings_with_budget[0].id == meeting.id
+        assert meetings_with_planning[0].id == meeting.id
+        assert meetings_with_collaborative[0].id == meeting.id
 

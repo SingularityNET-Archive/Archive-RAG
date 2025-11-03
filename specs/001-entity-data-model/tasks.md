@@ -175,17 +175,17 @@
 
 ### Tests for User Story 5
 
-- [ ] T064 [P] [US5] Unit test for Tag model validation in `tests/unit/test_entity_models.py`
-- [ ] T065 [P] [US5] Integration test for query meetings by tag in `tests/integration/test_entity_relationships.py`
+- [X] T064 [P] [US5] Unit test for Tag model validation in `tests/unit/test_entity_models.py`
+- [X] T065 [P] [US5] Integration test for query meetings by tag in `tests/integration/test_entity_relationships.py`
 
 ### Implementation for User Story 5
 
-- [ ] T066 [P] [US5] Create Tag model in `src/models/tag.py` with id (UUID), meeting_id (UUID, FK), topics_covered (Text or Array), emotions (Text or Array), created_at fields
-- [ ] T067 [US5] Implement `save_tag()` in `src/services/entity_storage.py` to save tag JSON file to `entities/tags/{id}.json`
-- [ ] T068 [US5] Implement `get_meetings_by_tag()` in `src/services/entity_query.py` to query meetings by tag values (topics_covered or emotions) - scan `entities/tags/` directory with filtering
-- [ ] T069 [US5] Add tag-based query support to `archive-rag query-meeting` CLI command in `src/cli/query.py` (add `--tags` option)
-- [ ] T070 [US5] Add validation for meeting_id foreign key in `src/lib/validation.py` (validate meeting exists before saving tag)
-- [ ] T071 [US5] Add logging for tag query operations in `src/services/entity_query.py`
+- [X] T066 [P] [US5] Create Tag model in `src/models/tag.py` with id (UUID), meeting_id (UUID, FK), topics_covered (Text or Array), emotions (Text or Array), created_at fields
+- [X] T067 [US5] Implement `save_tag()` in `src/services/entity_storage.py` to save tag JSON file to `entities/tags/{id}.json`
+- [X] T068 [US5] Implement `get_meetings_by_tag()` in `src/services/entity_query.py` to query meetings by tag values (topics_covered or emotions) - scan `entities/tags/` directory with filtering
+- [X] T069 [US5] Add tag-based query support to `archive-rag query-meeting` CLI command in `src/cli/query.py` (add `--tags` option)
+- [X] T070 [US5] Add validation for meeting_id foreign key in `src/lib/validation.py` (validate meeting exists before saving tag)
+- [X] T071 [US5] Add logging for tag query operations in `src/services/entity_query.py`
 
 **Checkpoint**: At this point, all user stories should work independently. Users can query meetings by workgroup, action items by person, documents for meetings, decisions with context, and meetings by tags.
 
@@ -389,8 +389,8 @@ With multiple developers:
 - **User Story 1 (P1)**: 14 tasks (13 tests + implementation + 1 validation task T027A for FR-024)
 - **User Story 2 (P1)**: 11 tasks (5 tests + implementation)
 - **User Story 3 (P2)**: 10 tasks (3 tests + implementation)
-- **User Story 4 (P2)**: 12 tasks (3 tests + implementation + 2 tasks T063A/T063B for FR-020/SC-008)
-- **User Story 5 (P3)**: 8 tasks (2 tests + implementation)
+- **User Story 4 (P2)**: 12 tasks (3 tests + implementation + 2 tasks T063A/T063B for FR-020/SC-008) - COMPLETE
+- **User Story 5 (P3)**: 8 tasks (2 tests + implementation) - COMPLETE
 - **Many-to-Many & Cascade**: 14 tasks
 - **Migration & URL Ingestion**: 13 tasks
 - **Polish**: 11 tasks

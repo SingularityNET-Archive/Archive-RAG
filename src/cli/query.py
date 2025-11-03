@@ -11,7 +11,7 @@ from ..services.query_service import create_query_service
 from ..services.citation_extractor import format_citations_as_text
 from ..services.entity_query import EntityQueryService
 from ..services.decision_query import query_decisions_by_text, format_decision_results
-from ..lib.config import DEFAULT_TOP_K, DEFAULT_SEED
+from ..lib.config import DEFAULT_TOP_K, DEFAULT_SEED, ENTITIES_TAGS_DIR
 from ..lib.auth import get_user_id
 from ..lib.logging import get_logger
 from ..services.compliance_checker import ComplianceChecker
@@ -173,6 +173,11 @@ def query_meeting_command(
             "--decisions",
             help="Query decisions made in this meeting"
         ),
+        tags: bool = typer.Option(
+            False,
+            "--tags",
+            help="Query tags for this meeting"
+        ),
         output_format: str = typer.Option(
             "text",
             "--output-format",
@@ -238,11 +243,46 @@ def query_meeting_command(
                         typer.echo(f"    Created: {decision.created_at}")
                 
                 logger.info("query_meeting_decisions_success", meeting_id=str(meeting_uuid), decision_count=len(decisions_list))
+            elif tags:
+                # Query tags for meeting
+                # First, get all tags for this meeting
+                tags_list = []
+                for tag_file in ENTITIES_TAGS_DIR.glob("*.json"):
+                    try:
+                        tag_id = UUID(tag_file.stem)
+                        from src.services.entity_storage import load_entity
+                        from src.models.tag import Tag
+                        tag = load_entity(tag_id, ENTITIES_TAGS_DIR, Tag)
+                        if tag and tag.meeting_id == meeting_uuid:
+                            tags_list.append(tag)
+                    except (ValueError, AttributeError):
+                        continue
+                
+                if output_format == "json":
+                    import json
+                    tags_data = [tag.model_dump(mode="json") for tag in tags_list]
+                    typer.echo(json.dumps({"meeting_id": str(meeting_uuid), "tags": tags_data, "count": len(tags_list)}, indent=2))
+                else:
+                    # Text format
+                    typer.echo(f"Meeting ID: {meeting_id}")
+                    typer.echo(f"Found {len(tags_list)} tag(s)")
+                    typer.echo("\nTags:")
+                    for tag in tags_list:
+                        if tag.topics_covered:
+                            topics = tag.topics_covered if isinstance(tag.topics_covered, list) else [tag.topics_covered]
+                            typer.echo(f"  Topics: {', '.join(str(t) for t in topics)}")
+                        if tag.emotions:
+                            emotions = tag.emotions if isinstance(tag.emotions, list) else [tag.emotions]
+                            typer.echo(f"  Emotions: {', '.join(str(e) for e in emotions)}")
+                        typer.echo(f"  Created: {tag.created_at}")
+                
+                logger.info("query_meeting_tags_success", meeting_id=str(meeting_uuid), tag_count=len(tags_list))
             else:
                 # Just display meeting info (no options requested)
                 typer.echo(f"Meeting ID: {meeting_id}")
                 typer.echo("Use --documents to query documents for this meeting.")
                 typer.echo("Use --decisions to query decisions made in this meeting.")
+                typer.echo("Use --tags to query tags for this meeting.")
             
         except Exception as e:
             logger.error("query_meeting_failed", error=str(e), meeting_id=meeting_id)

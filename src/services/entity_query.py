@@ -23,6 +23,7 @@ from src.models.action_item import ActionItem
 from src.models.document import Document
 from src.models.agenda_item import AgendaItem
 from src.models.decision_item import DecisionItem, DecisionEffect
+from src.models.tag import Tag
 
 logger = get_logger(__name__)
 
@@ -471,5 +472,79 @@ class EntityQueryService:
             
         except Exception as e:
             logger.error("query_decision_items_by_effect_failed", effect=effect.value, error=str(e))
+            raise
+    
+    def get_meetings_by_tag(self, tag_value: str, tag_type: str = "topics") -> List[Meeting]:
+        """
+        Get all meetings matching a specific tag value.
+        
+        Searches in either topics_covered or emotions fields based on tag_type.
+        Supports both string and list formats for tag values.
+        
+        Args:
+            tag_value: Tag value to search for (e.g., "budget", "collaborative")
+            tag_type: Type of tag to search ("topics" or "emotions", default: "topics")
+        
+        Returns:
+            List of Meeting entities with matching tag values
+        
+        Raises:
+            ValueError: If tag_type is invalid or entity loading fails
+        """
+        if tag_type not in ("topics", "emotions"):
+            raise ValueError(f"Invalid tag_type: {tag_type}. Must be 'topics' or 'emotions'")
+        
+        logger.info("query_meetings_by_tag_start", tag_value=tag_value, tag_type=tag_type)
+        
+        try:
+            # Find all tags matching the tag value
+            matching_meeting_ids = set()
+            
+            for tag_file in ENTITIES_TAGS_DIR.glob("*.json"):
+                try:
+                    tag_id = UUID(tag_file.stem)
+                    tag = load_entity(tag_id, ENTITIES_TAGS_DIR, Tag)
+                    if not tag:
+                        continue
+                    
+                    # Check the appropriate field based on tag_type
+                    field_value = tag.topics_covered if tag_type == "topics" else tag.emotions
+                    
+                    if field_value is None:
+                        continue
+                    
+                    # Handle both string and list formats
+                    tag_values = []
+                    if isinstance(field_value, list):
+                        tag_values = [str(v).lower().strip() for v in field_value if v]
+                    elif isinstance(field_value, str):
+                        # String might be comma-separated or single value
+                        tag_values = [v.strip().lower() for v in field_value.split(",") if v.strip()]
+                    
+                    # Check if tag_value matches (case-insensitive)
+                    search_value = tag_value.lower().strip()
+                    if any(search_value in v or v in search_value for v in tag_values):
+                        matching_meeting_ids.add(tag.meeting_id)
+                        
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_meetings_by_tag_loading_failed", tag_id=tag_file.stem, error=str(e))
+                    continue
+            
+            # Load all matching meetings
+            meetings = []
+            for meeting_id in matching_meeting_ids:
+                try:
+                    meeting = load_entity(meeting_id, ENTITIES_MEETINGS_DIR, Meeting)
+                    if meeting:
+                        meetings.append(meeting)
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_meetings_by_tag_meeting_load_failed", meeting_id=str(meeting_id), error=str(e))
+                    continue
+            
+            logger.info("query_meetings_by_tag_success", tag_value=tag_value, tag_type=tag_type, meeting_count=len(meetings))
+            return meetings
+            
+        except Exception as e:
+            logger.error("query_meetings_by_tag_failed", tag_value=tag_value, tag_type=tag_type, error=str(e))
             raise
 
