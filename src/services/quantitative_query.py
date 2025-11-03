@@ -6,7 +6,12 @@ from uuid import UUID
 import json
 import urllib.request
 
-from src.lib.config import ENTITIES_MEETINGS_DIR, ENTITIES_WORKGROUPS_DIR, ENTITIES_PEOPLE_DIR
+from src.lib.config import (
+    ENTITIES_MEETINGS_DIR,
+    ENTITIES_WORKGROUPS_DIR,
+    ENTITIES_PEOPLE_DIR,
+    ENTITIES_DECISION_ITEMS_DIR
+)
 from src.lib.logging import get_logger
 from src.services.entity_storage import load_entity, load_index
 from src.models.meeting import Meeting
@@ -473,7 +478,57 @@ class QuantitativeQueryService:
                 result["source"] = "Entity storage"
             return result
         
-        # Check for workgroup questions
+        # Check for decision questions (prioritize over workgroup)
+        if "decision" in question_lower and ("how many" in question_lower or "count" in question_lower or "number" in question_lower):
+            # Count decisions from entity storage
+            decision_dir = ENTITIES_DECISION_ITEMS_DIR
+            if decision_dir.exists():
+                decision_files = list(decision_dir.glob("*.json"))
+                decision_count = len(decision_files)
+                
+                # Optionally filter by workgroup if mentioned
+                if "workgroup" in question_lower:
+                    # Count decisions by scanning meetings and their agenda items
+                    # For now, return total count with note about workgroup filtering
+                    return {
+                        "answer": f"There are {decision_count} decisions in the archive across all workgroups.",
+                        "count": decision_count,
+                        "source": f"JSON files in {decision_dir}",
+                        "method": "Direct file count from entity storage - counted decision item JSON files",
+                        "citations": [{
+                            "type": "data_source",
+                            "description": f"Counted {decision_count} decisions from entity storage",
+                            "method": "Direct file count from decision_items directory",
+                            "file_count": decision_count
+                        }]
+                    }
+                else:
+                    return {
+                        "answer": f"There are {decision_count} decisions in the archive.",
+                        "count": decision_count,
+                        "source": f"JSON files in {decision_dir}",
+                        "method": "Direct file count from entity storage - counted decision item JSON files",
+                        "citations": [{
+                            "type": "data_source",
+                            "description": f"Counted {decision_count} decisions from entity storage",
+                            "method": "Direct file count",
+                            "file_count": decision_count
+                        }]
+                    }
+            else:
+                return {
+                    "answer": "No decisions found in entity storage.",
+                    "count": 0,
+                    "source": f"JSON files in {decision_dir}",
+                    "method": "Direct file count - directory not found",
+                    "citations": [{
+                        "type": "data_source",
+                        "description": "Decision items directory not found in entity storage",
+                        "method": "Directory check"
+                    }]
+                }
+        
+        # Check for workgroup questions (only if not asking about decisions)
         if "workgroup" in question_lower and ("how many" in question_lower or "count" in question_lower or "number" in question_lower):
             workgroup_stats = self.get_meeting_statistics()
             workgroup_count = len(workgroup_stats.get("meetings_by_workgroup", {}))
