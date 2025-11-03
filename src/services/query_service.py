@@ -60,8 +60,16 @@ class QueryService:
         query_id = str(uuid.uuid4())
         
         try:
-            # Load index
+            # Load index (includes compliance checks - T047 - US3)
             index, embedding_index = load_index(index_name)
+            
+            # Verify entity-based FAISS index compatibility (T047 - US3)
+            # Check that index metadata contains meeting_id references (entity-based)
+            from ..services.compliance_checker import ComplianceChecker
+            checker = ComplianceChecker()
+            violations = checker.check_faiss_operations()
+            if violations:
+                raise violations[0]
             
             # Create embedding service
             embedding_service = create_embedding_service(
@@ -75,6 +83,12 @@ class QueryService:
                 index_name,
                 top_k=top_k
             )
+            
+            # Verify RAG queries work with entity-based FAISS indexes (T047 - US3)
+            # Check that retrieved chunks contain meeting_id (entity-based structure)
+            for chunk in retrieved_chunks:
+                if 'meeting_id' not in chunk:
+                    logger.warning("rag_query_chunk_missing_meeting_id", chunk=chunk)
             
             # Check evidence
             evidence_found = check_evidence(retrieved_chunks)

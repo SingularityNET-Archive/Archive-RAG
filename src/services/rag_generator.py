@@ -6,8 +6,23 @@ import torch
 
 from ..lib.config import DEFAULT_SEED
 from ..lib.logging import get_logger
+from ..lib.compliance import ConstitutionViolation
 
 logger = get_logger(__name__)
+
+# Global compliance checker instance
+_compliance_checker = None
+
+
+def _get_compliance_checker():
+    """Get or create compliance checker instance."""
+    global _compliance_checker
+    if _compliance_checker is None:
+        from ..services.compliance_checker import ComplianceChecker
+        _compliance_checker = ComplianceChecker()
+        # Enable monitoring by default for compliance checking
+        _compliance_checker.enable_monitoring()
+    return _compliance_checker
 
 
 class RAGGenerator:
@@ -92,18 +107,28 @@ class RAGGenerator:
             query: User query text
             retrieved_context: List of retrieved chunks with metadata
             max_length: Maximum length of generated text
-            
+        
         Returns:
             Generated answer text
+            
+        Raises:
+            ConstitutionViolation: If compliance violation detected
         """
-        # Assemble context from retrieved chunks
-        context_text = "\n\n".join([
-            f"[Meeting: {chunk.get('meeting_id', 'unknown')}]\n{chunk.get('text', '')}"
-            for chunk in retrieved_context
-        ])
-        
-        # Create prompt
-        prompt = f"""Based on the following meeting records, answer the question.
+        # Check compliance before generation
+        checker = _get_compliance_checker()
+        violations = checker.check_llm_operations()
+        if violations:
+            # Fail-fast on first violation
+            raise violations[0]
+        try:
+            # Assemble context from retrieved chunks
+            context_text = "\n\n".join([
+                f"[Meeting: {chunk.get('meeting_id', 'unknown')}]\n{chunk.get('text', '')}"
+                for chunk in retrieved_context
+            ])
+            
+            # Create prompt
+            prompt = f"""Based on the following meeting records, answer the question.
 
 Meeting Records:
 {context_text}
@@ -111,31 +136,41 @@ Meeting Records:
 Question: {query}
 
 Answer:"""
-        
-        if self.generator:
-            # Use LLM generation
-            try:
-                outputs = self.generator(
-                    prompt,
-                    max_length=max_length,
-                    num_return_sequences=1,
-                    temperature=0.7,
-                    do_sample=True,
-                    truncation=True,
-                    pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, 'eos_token_id') else None
-                )
-                answer = outputs[0]["generated_text"].split("Answer:")[-1].strip()
-            except Exception as e:
-                logger.debug("generation_failed_fallback", error=str(e))
-                # Fallback to template
+            
+            if self.generator:
+                # Use LLM generation
+                try:
+                    outputs = self.generator(
+                        prompt,
+                        max_length=max_length,
+                        num_return_sequences=1,
+                        temperature=0.7,
+                        do_sample=True,
+                        truncation=True,
+                        pad_token_id=self.tokenizer.eos_token_id if hasattr(self.tokenizer, 'eos_token_id') else None
+                    )
+                    answer = outputs[0]["generated_text"].split("Answer:")[-1].strip()
+                except Exception as e:
+                    logger.debug("generation_failed_fallback", error=str(e))
+                    # Fallback to template
+                    answer = self._template_generate(query, retrieved_context)
+            else:
+                # Use template-based generation (default for small datasets)
                 answer = self._template_generate(query, retrieved_context)
-        else:
-            # Use template-based generation (default for small datasets)
-            answer = self._template_generate(query, retrieved_context)
-        
-        logger.info("answer_generated", query=query[:50], answer_length=len(answer))
-        
-        return answer
+            
+            # Check compliance after generation
+            violations = checker.check_llm_operations()
+            if violations:
+                raise violations[0]
+            
+            logger.info("answer_generated", query=query[:50], answer_length=len(answer))
+            
+            return answer
+        except ConstitutionViolation:
+            raise
+        except Exception as e:
+            logger.error("generation_failed", query=query[:50], error=str(e))
+            raise
     
     def _template_generate(
         self,

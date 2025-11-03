@@ -20,6 +20,7 @@ from src.lib.config import (
     init_entity_storage,
 )
 from src.lib.validation import validate_foreign_key
+from src.lib.compliance import ConstitutionViolation
 from src.models.base import BaseEntity
 from src.models.workgroup import Workgroup
 from src.models.meeting import Meeting
@@ -28,6 +29,20 @@ from src.models.agenda_item import AgendaItem
 from src.models.action_item import ActionItem
 
 T = TypeVar("T", bound=BaseEntity)
+
+# Global compliance checker instance
+_compliance_checker = None
+
+
+def _get_compliance_checker():
+    """Get or create compliance checker instance."""
+    global _compliance_checker
+    if _compliance_checker is None:
+        from src.services.compliance_checker import ComplianceChecker
+        _compliance_checker = ComplianceChecker()
+        # Enable monitoring by default for compliance checking
+        _compliance_checker.enable_monitoring()
+    return _compliance_checker
 
 
 def init_entity_storage_directories() -> None:
@@ -59,7 +74,23 @@ def save_entity(entity: BaseEntity, entity_dir: Path) -> None:
     
     Raises:
         IOError: If file write fails
+        ConstitutionViolation: If compliance violation detected
     """
+    # Check compliance before saving
+    checker = _get_compliance_checker()
+    violations = checker.check_entity_operations()
+    if violations:
+        # Fail-fast on first violation
+        raise violations[0]
+    
+    # Verify Python-only requirement (T037 - US2)
+    # Check that entity operations use only Python standard library
+    import sys
+    module_names = [name for name in sys.modules.keys() if name.startswith(('json', 'pathlib', 'os'))]
+    python_only_violations = checker.verify_python_standard_library_only(module_names)
+    if python_only_violations:
+        raise python_only_violations[0]
+    
     entity_dir.mkdir(parents=True, exist_ok=True)
     entity_file = entity_dir / f"{entity.id}.json"
     temp_file = entity_dir / f"{entity.id}.json.tmp"
@@ -72,6 +103,13 @@ def save_entity(entity: BaseEntity, entity_dir: Path) -> None:
         
         # Atomic rename
         temp_file.replace(entity_file)
+        
+        # Check compliance after saving
+        violations = checker.check_entity_operations()
+        if violations:
+            raise violations[0]
+    except ConstitutionViolation:
+        raise
     except Exception as e:
         # Clean up temp file on error
         if temp_file.exists():

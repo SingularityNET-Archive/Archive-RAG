@@ -13,8 +13,22 @@ from ..services.entity_query import EntityQueryService
 from ..lib.config import DEFAULT_TOP_K, DEFAULT_SEED
 from ..lib.auth import get_user_id
 from ..lib.logging import get_logger
+from ..services.compliance_checker import ComplianceChecker
 
 logger = get_logger(__name__)
+
+# Global compliance checker instance for CLI commands
+_cli_compliance_checker = None
+
+
+def _get_cli_compliance_checker():
+    """Get or create compliance checker instance for CLI operations (T055 - US4)."""
+    global _cli_compliance_checker
+    if _cli_compliance_checker is None:
+        _cli_compliance_checker = ComplianceChecker()
+        # Enable monitoring for CLI operations
+        _cli_compliance_checker.enable_monitoring()
+    return _cli_compliance_checker
 
 
 def query_command(
@@ -55,6 +69,15 @@ def query_command(
     Query the RAG system and get evidence-bound answers with citations.
     """
     try:
+        # Check compliance for CLI command execution (T055 - US4)
+        checker = _get_cli_compliance_checker()
+        violations = checker.check_entity_operations()
+        violations.extend(checker.check_faiss_operations())
+        if violations:
+            logger.error("cli_command_compliance_violation", violations=[str(v) for v in violations])
+            typer.echo(f"Compliance violation detected: {violations[0]}", err=True)
+            raise typer.Exit(code=1)
+        
         # Get user ID (from CLI flag or SSO context)
         resolved_user_id = get_user_id(user_id)
         

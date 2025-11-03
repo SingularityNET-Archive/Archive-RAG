@@ -6,8 +6,23 @@ from sentence_transformers import SentenceTransformer
 
 from ..lib.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_SEED
 from ..lib.logging import get_logger
+from ..lib.compliance import ConstitutionViolation
 
 logger = get_logger(__name__)
+
+# Global compliance checker instance
+_compliance_checker = None
+
+
+def _get_compliance_checker():
+    """Get or create compliance checker instance."""
+    global _compliance_checker
+    if _compliance_checker is None:
+        from ..services.compliance_checker import ComplianceChecker
+        _compliance_checker = ComplianceChecker()
+        # Enable monitoring by default for compliance checking
+        _compliance_checker.enable_monitoring()
+    return _compliance_checker
 
 
 class EmbeddingService:
@@ -39,8 +54,24 @@ class EmbeddingService:
             
         Returns:
             Embedding vector as numpy array
+            
+        Raises:
+            ConstitutionViolation: If compliance violation detected
         """
+        # Check compliance before embedding
+        checker = _get_compliance_checker()
+        violations = checker.check_embedding_operations()
+        if violations:
+            # Fail-fast on first violation
+            raise violations[0]
+        
         embedding = self.model.encode(text, convert_to_numpy=True)
+        
+        # Check compliance after embedding
+        violations = checker.check_embedding_operations()
+        if violations:
+            raise violations[0]
+        
         return embedding
     
     def embed_texts(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
@@ -53,13 +84,29 @@ class EmbeddingService:
             
         Returns:
             Numpy array of embedding vectors
+            
+        Raises:
+            ConstitutionViolation: If compliance violation detected
         """
+        # Check compliance before embedding
+        checker = _get_compliance_checker()
+        violations = checker.check_embedding_operations()
+        if violations:
+            # Fail-fast on first violation
+            raise violations[0]
+        
         embeddings = self.model.encode(
             texts,
             batch_size=batch_size,
             convert_to_numpy=True,
             show_progress_bar=False
         )
+        
+        # Check compliance after embedding
+        violations = checker.check_embedding_operations()
+        if violations:
+            raise violations[0]
+        
         return embeddings
     
     def get_embedding_dimension(self) -> int:
