@@ -11,6 +11,7 @@ from src.models.person import Person
 from src.models.agenda_item import AgendaItem, AgendaItemStatus
 from src.models.decision_item import DecisionItem, DecisionEffect
 from src.models.action_item import ActionItem, ActionItemStatus
+from src.models.document import Document
 from src.services.entity_storage import (
     save_meeting,
     save_workgroup,
@@ -18,6 +19,7 @@ from src.services.entity_storage import (
     save_agenda_item,
     save_decision_item,
     save_action_item,
+    save_document,
     load_entity,
     ENTITIES_WORKGROUPS_DIR,
     ENTITIES_PEOPLE_DIR
@@ -185,11 +187,61 @@ def convert_and_save_meeting_record(meeting_record: MeetingRecord) -> Meeting:
     else:
         logger.debug("meeting_entity_exists", meeting_id=str(meeting_id))
     
-    # Step 10: Extract and save agenda items, decision items, and action items
+    # Step 10: Extract and save documents (workingDocs)
+    if meeting_record.meetingInfo and meeting_record.meetingInfo.workingDocs:
+        extract_documents(meeting_id, meeting_record.meetingInfo.workingDocs)
+    
+    # Step 11: Extract and save agenda items, decision items, and action items
     if meeting_record.agendaItems:
         extract_agenda_items_and_decisions(meeting_id, meeting_record.agendaItems)
     
     return meeting
+
+
+def extract_documents(meeting_id: UUID, working_docs_data: list) -> None:
+    """
+    Extract document entities from meeting workingDocs.
+    
+    Args:
+        meeting_id: UUID of the meeting
+        working_docs_data: List of working document dictionaries
+    """
+    logger.info("extracting_documents_start", meeting_id=str(meeting_id), count=len(working_docs_data))
+    
+    import hashlib
+    
+    for doc_index, doc_data in enumerate(working_docs_data):
+        if not isinstance(doc_data, dict):
+            continue
+        
+        # Extract title and link
+        title = doc_data.get("title", "")
+        link = doc_data.get("link", "")
+        
+        if not title or not link:
+            logger.warning("document_missing_fields", meeting_id=str(meeting_id), index=doc_index, title=title, has_link=bool(link))
+            continue
+        
+        # Create document ID (deterministic from meeting_id + document index)
+        doc_hash = hashlib.md5(f"{meeting_id}_{doc_index}_{link}".encode()).digest()[:16]
+        document_id = UUID(bytes=doc_hash)
+        
+        # Create and save document entity
+        try:
+            document = Document(
+                id=document_id,
+                meeting_id=meeting_id,
+                title=title.strip(),
+                link=link.strip(),  # HttpUrl field will validate URL format
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            
+            save_document(document)
+            logger.debug("document_saved", document_id=str(document_id), meeting_id=str(meeting_id), title=title[:50])
+        except Exception as e:
+            logger.warning("document_save_failed", document_id=str(document_id), meeting_id=str(meeting_id), error=str(e))
+            continue
 
 
 def extract_agenda_items_and_decisions(meeting_id: UUID, agenda_items_data: list) -> None:

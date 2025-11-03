@@ -544,6 +544,39 @@ class QuantitativeQueryService:
                 }]
             }
         
+        # Check for document questions
+        if "document" in question_lower and ("how many" in question_lower or "count" in question_lower or "number" in question_lower):
+            # Count documents from entity storage
+            from src.lib.config import ENTITIES_DOCUMENTS_DIR
+            documents_dir = ENTITIES_DOCUMENTS_DIR
+            if documents_dir.exists():
+                doc_files = list(documents_dir.glob("*.json"))
+                doc_count = len(doc_files)
+                return {
+                    "answer": f"There are {doc_count} documents in the archive.",
+                    "count": doc_count,
+                    "source": f"JSON files in {documents_dir}",
+                    "method": "Direct file count from entity storage - counted document JSON files",
+                    "citations": [{
+                        "type": "data_source",
+                        "description": f"Counted {doc_count} documents from entity storage",
+                        "method": "Direct file count",
+                        "file_count": doc_count
+                    }]
+                }
+            else:
+                return {
+                    "answer": "No documents found in entity storage.",
+                    "count": 0,
+                    "source": f"JSON files in {documents_dir}",
+                    "method": "Direct file count - directory not found",
+                    "citations": [{
+                        "type": "data_source",
+                        "description": "Documents directory not found in entity storage",
+                        "method": "Directory check"
+                    }]
+                }
+        
         # Check for people questions
         if "people" in question_lower or "person" in question_lower or "participant" in question_lower:
             if "how many" in question_lower or "count" in question_lower or "number" in question_lower:
