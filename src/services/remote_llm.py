@@ -77,32 +77,149 @@ class RemoteLLMService:
     def _generate_openai(self, prompt: str, max_length: int, temperature: float) -> str:
         """Generate text using OpenAI API."""
         import openai
+        import httpx
+        import time
         
-        client = openai.OpenAI(api_key=self.api_key, base_url=self.api_url or None)
+        # Create a custom HTTP client with better connection settings
+        # This helps with connection errors by configuring connection pooling,
+        # timeouts, and retry behavior at the HTTP level
+        http_client = httpx.Client(
+            timeout=httpx.Timeout(120.0, connect=30.0),  # 2 min total, 30s connect
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+            follow_redirects=True,
+            verify=True  # SSL verification
+        )
         
-        try:
-            response = client.chat.completions.create(
-                model=self.model_name,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant that answers questions based on meeting records."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=max_length,
-                temperature=temperature
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            error_str = str(e)
-            # Check for quota errors (429) and log as warning instead of error
-            if "429" in error_str or "insufficient_quota" in error_str.lower() or "quota" in error_str.lower():
-                logger.warning(
-                    "openai_quota_exceeded",
-                    error=error_str,
-                    suggestion="OpenAI quota exceeded. Falling back to template-based generation."
+        # Create client with longer timeout and retries for connection issues
+        # Normalize base_url: ensure it doesn't have trailing slash (OpenAI client handles it)
+        base_url = (self.api_url.rstrip('/') + '/') if self.api_url else None
+        
+        client = openai.OpenAI(
+            api_key=self.api_key,
+            base_url=base_url,
+            timeout=120.0,  # 2 minute timeout for slow connections
+            max_retries=0,  # We handle retries manually with better control
+            http_client=http_client  # Use custom HTTP client with better connection handling
+        )
+        
+        # Retry logic with exponential backoff for connection errors
+        max_attempts = 5
+        retry_delays = [1, 2, 4, 8, 16]  # Exponential backoff: 1s, 2s, 4s, 8s, 16s
+        
+        for attempt in range(max_attempts):
+            try:
+                response = client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant that answers questions based on meeting records."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=max_length,
+                    temperature=temperature
                 )
-            else:
-                logger.error("openai_generation_failed", error=error_str)
-            raise
+                # Clean up HTTP client on success
+                try:
+                    http_client.close()
+                except Exception:
+                    pass
+                return response.choices[0].message.content.strip()
+            except openai.APIConnectionError as e:
+                # Connection errors (network issues, DNS, SSL, etc.)
+                if attempt < max_attempts - 1:
+                    # Retry with exponential backoff
+                    delay = retry_delays[attempt]
+                    logger.warning(
+                        "openai_llm_connection_retry",
+                        attempt=attempt + 1,
+                        max_attempts=max_attempts,
+                        delay=delay,
+                        error=str(e)[:100]
+                    )
+                    time.sleep(delay)
+                    continue  # Retry
+                else:
+                    # Final attempt failed
+                    error_msg = (
+                        f"OpenAI API connection failed after {max_attempts} attempts: {e}\n"
+                        f"  API URL: {self.api_url}\n"
+                        f"  Model: {self.model_name}\n"
+                        f"  Troubleshooting:\n"
+                        f"    - Check internet connectivity\n"
+                        f"    - Verify API URL is correct: {self.api_url}\n"
+                        f"    - Check firewall/proxy settings\n"
+                        f"    - Verify API key is valid (starts with 'sk-')\n"
+                        f"    - Ensure model '{self.model_name}' is valid for OpenAI API\n"
+                        f"    - Test connection: curl -v {self.api_url or 'https://api.openai.com/v1'}\n"
+                        f"    - Check OpenAI status: https://status.openai.com"
+                    )
+                    logger.error("openai_llm_connection_failed", 
+                               error=str(e), 
+                               api_url=self.api_url,
+                               model=self.model_name,
+                               api_key_present=bool(self.api_key),
+                               attempts=max_attempts)
+                    # Clean up HTTP client before raising
+                    try:
+                        http_client.close()
+                    except Exception:
+                        pass
+                    raise RuntimeError(error_msg) from e
+            except openai.APIError as e:
+                # API errors (authentication, rate limits, etc.) - don't retry, raise immediately
+                error_str = str(e)
+                status_code = getattr(e, 'status_code', None)
+                
+                # Check for quota errors (429)
+                if status_code == 429 or "429" in error_str or "insufficient_quota" in error_str.lower() or "quota" in error_str.lower():
+                    logger.warning(
+                        "openai_llm_quota_exceeded",
+                        error=error_str,
+                        status_code=status_code,
+                        suggestion="OpenAI quota exceeded. Falling back to template-based generation."
+                    )
+                # Check for authentication errors (401)
+                elif status_code == 401 or "401" in error_str or "unauthorized" in error_str.lower() or "invalid api key" in error_str.lower():
+                    error_msg = (
+                        f"OpenAI API authentication failed: {e}\n"
+                        f"  API URL: {self.api_url}\n"
+                        f"  Troubleshooting:\n"
+                        f"    - Verify API key is correct and active\n"
+                        f"    - Check API key format (should start with 'sk-')\n"
+                        f"    - Ensure API key has permissions for chat completions API\n"
+                        f"    - Check OpenAI account status and billing"
+                    )
+                    logger.error("openai_llm_auth_failed", 
+                               error=error_str,
+                               api_url=self.api_url,
+                               api_key_present=bool(self.api_key),
+                               status_code=status_code)
+                
+                # Clean up HTTP client before raising
+                try:
+                    http_client.close()
+                except Exception:
+                    pass
+                raise RuntimeError(error_str) from e
+            except Exception as e:
+                # Unexpected errors
+                error_str = str(e)
+                error_type = type(e).__name__
+                error_msg = (
+                    f"Unexpected error during OpenAI LLM generation: {error_type}: {error_str}\n"
+                    f"  API URL: {self.api_url}\n"
+                    f"  Model: {self.model_name}"
+                )
+                logger.error("openai_llm_unexpected_error", 
+                           error=error_str,
+                           error_type=error_type,
+                           api_url=self.api_url,
+                           model=self.model_name)
+                # Clean up HTTP client
+                try:
+                    http_client.close()
+                except Exception:
+                    pass
+                raise RuntimeError(error_msg) from e
     
     def _generate_huggingface(self, prompt: str, max_length: int, temperature: float) -> str:
         """Generate text using HuggingFace Inference API."""
