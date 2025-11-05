@@ -1,5 +1,6 @@
 """Entity query service for querying entities and relationships."""
 
+from datetime import date as date_type
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, TypeVar
 from uuid import UUID
@@ -636,5 +637,126 @@ class EntityQueryService:
             
         except Exception as e:
             logger.error("query_people_by_meeting_failed", meeting_id=str(meeting_id), error=str(e))
+            raise
+    
+    def get_all_topics(self) -> List[str]:
+        """
+        Get all unique topics from all tags.
+        
+        Extracts all unique topic values from tags.topics_covered field,
+        handling both string and list formats.
+        
+        Returns:
+            List of unique topic strings (sorted alphabetically)
+        """
+        logger.info("query_all_topics_start")
+        
+        try:
+            topics_set = set()
+            
+            for tag_file in ENTITIES_TAGS_DIR.glob("*.json"):
+                try:
+                    tag_id = UUID(tag_file.stem)
+                    tag = load_entity(tag_id, ENTITIES_TAGS_DIR, Tag)
+                    if not tag or not tag.topics_covered:
+                        continue
+                    
+                    # Handle both string and list formats
+                    if isinstance(tag.topics_covered, list):
+                        for topic in tag.topics_covered:
+                            if topic:
+                                topics_set.add(str(topic).strip())
+                    elif isinstance(tag.topics_covered, str):
+                        # String might be comma-separated or single value
+                        for topic in tag.topics_covered.split(","):
+                            topic = topic.strip()
+                            if topic:
+                                topics_set.add(topic)
+                                
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_all_topics_loading_failed", tag_id=tag_file.stem, error=str(e))
+                    continue
+            
+            topics_list = sorted(list(topics_set))
+            logger.info("query_all_topics_success", topic_count=len(topics_list))
+            return topics_list
+            
+        except Exception as e:
+            logger.error("query_all_topics_failed", error=str(e))
+            raise
+    
+    def get_meetings_by_date_range(
+        self,
+        start_date: Optional[date_type] = None,
+        end_date: Optional[date_type] = None,
+        year: Optional[int] = None,
+        month: Optional[int] = None
+    ) -> List[Meeting]:
+        """
+        Get meetings filtered by date range, year, or month.
+        
+        Args:
+            start_date: Start date (inclusive)
+            end_date: End date (inclusive)
+            year: Filter by year (e.g., 2025)
+            month: Filter by month (1-12, requires year)
+        
+        Returns:
+            List of Meeting entities matching the date criteria
+        """
+        logger.info(
+            "query_meetings_by_date_start",
+            start_date=str(start_date) if start_date else None,
+            end_date=str(end_date) if end_date else None,
+            year=year,
+            month=month
+        )
+        
+        try:
+            # Calculate date range from parameters
+            if year is not None:
+                from datetime import date
+                if month is not None:
+                    # Specific month/year
+                    start_date = date(year, month, 1)
+                    # Get last day of month
+                    if month == 12:
+                        end_date = date(year + 1, 1, 1)
+                    else:
+                        end_date = date(year, month + 1, 1)
+                else:
+                    # Entire year
+                    start_date = date(year, 1, 1)
+                    end_date = date(year + 1, 1, 1)
+            
+            # Load all meetings
+            all_meetings = self.find_all(ENTITIES_MEETINGS_DIR, Meeting)
+            
+            # Filter by date range
+            filtered_meetings = []
+            for meeting in all_meetings:
+                meeting_date = meeting.date
+                
+                # Check if date is within range
+                if start_date and meeting_date < start_date:
+                    continue
+                if end_date and meeting_date >= end_date:
+                    continue
+                
+                filtered_meetings.append(meeting)
+            
+            # Sort by date (most recent first)
+            filtered_meetings.sort(key=lambda m: m.date, reverse=True)
+            
+            logger.info(
+                "query_meetings_by_date_success",
+                meeting_count=len(filtered_meetings),
+                start_date=str(start_date) if start_date else None,
+                end_date=str(end_date) if end_date else None
+            )
+            return filtered_meetings
+            
+        except Exception as e:
+            logger.error("query_meetings_by_date_failed", error=str(e))
             raise
 

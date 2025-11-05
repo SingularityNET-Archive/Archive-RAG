@@ -12,6 +12,7 @@ from src.models.agenda_item import AgendaItem, AgendaItemStatus
 from src.models.decision_item import DecisionItem, DecisionEffect
 from src.models.action_item import ActionItem, ActionItemStatus
 from src.models.document import Document
+from src.models.tag import Tag
 from src.services.entity_storage import (
     save_meeting,
     save_workgroup,
@@ -20,6 +21,7 @@ from src.services.entity_storage import (
     save_decision_item,
     save_action_item,
     save_document,
+    save_tag,
     load_entity,
     ENTITIES_WORKGROUPS_DIR,
     ENTITIES_PEOPLE_DIR
@@ -186,6 +188,8 @@ def convert_and_save_meeting_record(meeting_record: MeetingRecord) -> Meeting:
         logger.info("meeting_entity_saved", meeting_id=str(meeting_id), workgroup_id=str(workgroup_id))
     else:
         logger.debug("meeting_entity_exists", meeting_id=str(meeting_id))
+        # Use existing meeting_id if meeting already exists
+        meeting_id = existing_meeting.id
     
     # Step 10: Extract and save documents (workingDocs)
     if meeting_record.meetingInfo and meeting_record.meetingInfo.workingDocs:
@@ -194,6 +198,10 @@ def convert_and_save_meeting_record(meeting_record: MeetingRecord) -> Meeting:
     # Step 11: Extract and save agenda items, decision items, and action items
     if meeting_record.agendaItems:
         extract_agenda_items_and_decisions(meeting_id, meeting_record.agendaItems)
+    
+    # Step 12: Extract and save tags (topics and emotions) - always process tags even if meeting exists
+    if meeting_record.tags:
+        extract_tags(meeting_id, meeting_record.tags)
     
     return meeting
 
@@ -514,6 +522,78 @@ def get_or_create_person(display_name: str) -> UUID:
     logger.debug("person_created", person_id=str(person_id), name=display_name)
     
     return person.id
+
+
+def extract_tags(meeting_id: UUID, tags_data: Any) -> None:
+    """
+    Extract tag entities from meeting tags data.
+    
+    Args:
+        meeting_id: UUID of the meeting
+        tags_data: TagsModel or dict with topicsCovered and emotions
+    """
+    from src.models.meeting_record import TagsModel
+    
+    logger.info("extracting_tags_start", meeting_id=str(meeting_id))
+    
+    # Convert to TagsModel if it's a dict
+    if isinstance(tags_data, dict):
+        tags_model = TagsModel(**tags_data)
+    elif isinstance(tags_data, TagsModel):
+        tags_model = tags_data
+    else:
+        logger.warning("tags_invalid_format", meeting_id=str(meeting_id))
+        return
+    
+    # Only create tag if there's actual data
+    if not tags_model.topicsCovered and not tags_model.emotions:
+        logger.debug("tags_empty", meeting_id=str(meeting_id))
+        return
+    
+    # Create deterministic tag ID from meeting_id
+    import hashlib
+    tag_hash = hashlib.md5(f"{meeting_id}_tag".encode()).digest()[:16]
+    tag_id = UUID(bytes=tag_hash)
+    
+    # Check if tag already exists
+    from src.lib.config import ENTITIES_TAGS_DIR
+    existing_tag = load_entity(tag_id, ENTITIES_TAGS_DIR, Tag)
+    
+    # Parse topics_covered (can be string or list)
+    topics_covered = None
+    if tags_model.topicsCovered:
+        if isinstance(tags_model.topicsCovered, str):
+            # Split comma-separated string
+            topics_list = [t.strip() for t in tags_model.topicsCovered.split(",") if t.strip()]
+            topics_covered = topics_list if len(topics_list) > 1 else (topics_list[0] if topics_list else None)
+        elif isinstance(tags_model.topicsCovered, list):
+            topics_covered = tags_model.topicsCovered
+    
+    # Parse emotions (can be string or list)
+    emotions = None
+    if tags_model.emotions:
+        if isinstance(tags_model.emotions, str):
+            # Split comma-separated string
+            emotions_list = [e.strip() for e in tags_model.emotions.split(",") if e.strip()]
+            emotions = emotions_list if len(emotions_list) > 1 else (emotions_list[0] if emotions_list else None)
+        elif isinstance(tags_model.emotions, list):
+            emotions = tags_model.emotions
+    
+    # Create and save tag entity
+    try:
+        tag = Tag(
+            id=tag_id,
+            meeting_id=meeting_id,
+            topics_covered=topics_covered,
+            emotions=emotions,
+            created_at=existing_tag.created_at if existing_tag else datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        save_tag(tag)
+        logger.info("tag_entity_saved", tag_id=str(tag_id), meeting_id=str(meeting_id))
+    except Exception as e:
+        logger.error("tag_entity_save_failed", meeting_id=str(meeting_id), error=str(e))
 
 
 def ingest_meetings_to_entities(source_url: str) -> int:
