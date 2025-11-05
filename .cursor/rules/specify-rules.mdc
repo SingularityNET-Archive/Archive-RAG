@@ -4,6 +4,7 @@ Auto-generated from all feature plans. Last updated: 2025-11-02
 
 ## Active Technologies
 - Python 3.11+ (tested with Python 3.11, 3.12, 3.13) (001-entity-data-model)
+- Python 3.11+ (aligned with existing project requirements) (003-discord-bot-access)
 
 - Python 3.11 (locked) (001-archive-meeting-rag)
 
@@ -23,10 +24,10 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11 (locked): Follow standard conventions
 
 ## Recent Changes
+- 003-discord-bot-access: Added Python 3.11+ (aligned with existing project requirements)
 - 002-constitution-compliance: Added Python 3.11+ (tested with Python 3.11, 3.12, 3.13)
 - 001-entity-data-model: Added Python 3.11+ (tested with Python 3.11, 3.12, 3.13)
 
-- 001-archive-meeting-rag: Added Python 3.11 (locked)
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
