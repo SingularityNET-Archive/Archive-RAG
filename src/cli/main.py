@@ -12,6 +12,8 @@ from .extract_entities import extract_entities_command
 from .evaluate import evaluate_command
 from .compliance import check_compliance_command
 from .ingest_entities import ingest_entities_command
+from .backfill_tags import backfill_tags_command
+from .bot import bot_command
 
 app = typer.Typer(
     name="archive-rag",
@@ -236,6 +238,32 @@ def ingest_entities(
 ):
     """Ingest meetings from source URL and save to entity storage."""
     ingest_entities_command(source_url=source_url, verify_hash=verify_hash)
+
+
+@app.command()
+def backfill_tags(
+    source_url: str = typer.Argument(..., help="URL to source JSON file containing meetings"),
+    verify_hash: Optional[str] = typer.Option(None, "--verify-hash", help="Optional SHA-256 hash to verify source file integrity")
+):
+    """Backfill tags from source URL for existing meetings."""
+    backfill_tags_command(source_url=source_url, verify_hash=verify_hash)
+
+
+@app.command()
+def bot(
+    token: Optional[str] = typer.Option(
+        None,
+        "--token",
+        help="Discord bot token (overrides DISCORD_BOT_TOKEN env var)"
+    ),
+    index_name: Optional[str] = typer.Option(
+        None,
+        "--index-name",
+        help="RAG index name (overrides INDEX_NAME env var)"
+    )
+):
+    """Start the Discord bot for Archive-RAG."""
+    bot_command(token=token, index_name=index_name)
 
 
 @app.command()
