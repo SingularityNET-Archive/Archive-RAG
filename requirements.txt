@@ -23,6 +23,9 @@ gensim>=4.3.0
 # Entity Extraction
 spacy>=3.6.0
 
+# Entity Normalization
+rapidfuzz>=3.0.0
+
 # Utilities
 pydantic>=2.0.0
 python-dateutil>=2.8.0

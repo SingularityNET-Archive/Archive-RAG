@@ -73,22 +73,32 @@ class MeetingRecord(BaseModel):
             if data.get("workgroup_id") and data.get("meetingInfo"):
                 meeting_info = data["meetingInfo"]
                 
+                # Handle both dict and Pydantic model
+                def get_meeting_info_value(key, default=None):
+                    if isinstance(meeting_info, dict):
+                        return meeting_info.get(key, default)
+                    else:
+                        # Pydantic model - use getattr
+                        return getattr(meeting_info, key, default)
+                
                 # Set id from workgroup_id
                 if not data.get("id"):
                     data["id"] = data["workgroup_id"]
                 
                 # Set date from meetingInfo.date
-                if not data.get("date") and meeting_info.get("date"):
+                meeting_date = get_meeting_info_value("date")
+                if not data.get("date") and meeting_date:
                     # Convert YYYY-MM-DD to ISO 8601 format
-                    date_str = meeting_info["date"]
+                    date_str = str(meeting_date)
                     if "T" not in date_str:
                         date_str = f"{date_str}T00:00:00Z"
                     data["date"] = date_str
                 
                 # Set participants from meetingInfo.peoplePresent
-                if not data.get("participants") and meeting_info.get("peoplePresent"):
+                people_present = get_meeting_info_value("peoplePresent")
+                if not data.get("participants") and people_present:
                     # Parse comma-separated string
-                    people = [p.strip() for p in meeting_info["peoplePresent"].split(",")]
+                    people = [p.strip() for p in str(people_present).split(",")]
                     data["participants"] = people
                 
                 # Extract transcript from decisionItems

@@ -14,6 +14,8 @@ from .compliance import check_compliance_command
 from .ingest_entities import ingest_entities_command
 from .backfill_tags import backfill_tags_command
 from .bot import bot_command
+from .test_entity_extraction import test_entity_extraction_command
+from .test_semantic_chunking import test_semantic_chunking_command
 
 app = typer.Typer(
     name="archive-rag",
@@ -234,10 +236,11 @@ def check_compliance(
 @app.command()
 def ingest_entities(
     source_url: str = typer.Argument(..., help="URL to source JSON file containing meetings"),
-    verify_hash: Optional[str] = typer.Option(None, "--verify-hash", help="Optional SHA-256 hash to verify source file integrity")
+    verify_hash: Optional[str] = typer.Option(None, "--verify-hash", help="Optional SHA-256 hash to verify source file integrity"),
+    output_json: Optional[Path] = typer.Option(None, "--output-json", help="Path to JSON file to save structured entity extraction output")
 ):
     """Ingest meetings from source URL and save to entity storage."""
-    ingest_entities_command(source_url=source_url, verify_hash=verify_hash)
+    ingest_entities_command(source_url=source_url, verify_hash=verify_hash, output_json=output_json)
 
 
 @app.command()
@@ -267,10 +270,108 @@ def bot(
 
 
 @app.command()
+def test_entity_extraction(
+    source_url: str = typer.Argument(..., help="URL to source JSON file containing meetings"),
+    phases: Optional[str] = typer.Option(
+        None,
+        "--phases",
+        help="Comma-separated list of phases to test (e.g., 'US1,US2,US3' or 'all')"
+    ),
+    meeting_index: Optional[int] = typer.Option(
+        None,
+        "--meeting-index",
+        help="Index of single meeting to test (0-based). Mutually exclusive with --random and --index-range"
+    ),
+    random: Optional[int] = typer.Option(
+        None,
+        "--random",
+        help="Test N random meetings. Mutually exclusive with --meeting-index and --index-range"
+    ),
+    index_range: Optional[str] = typer.Option(
+        None,
+        "--index-range",
+        help="Test meetings in index range (e.g., '0:5' or '10:20'). Mutually exclusive with --meeting-index and --random"
+    ),
+    output_file: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        help="Path to JSON file to save test results"
+    ),
+    verify_hash: Optional[str] = typer.Option(
+        None,
+        "--verify-hash",
+        help="Optional SHA-256 hash to verify source file integrity"
+    )
+):
+    """Test entity extraction implementation phases."""
+    test_entity_extraction_command(
+        source_url=source_url,
+        phases=phases,
+        meeting_index=meeting_index,
+        random=random,
+        index_range=index_range,
+        output_file=output_file,
+        verify_hash=verify_hash
+    )
+
+
+@app.command()
 def version():
     """Show version information."""
     from .. import __version__
     typer.echo(f"Archive-RAG version {__version__}")
+
+
+@app.command()
+def test_semantic_chunking(
+    source_url: str = typer.Argument(..., help="URL to source JSON file containing meetings"),
+    queries: Optional[str] = typer.Option(
+        None,
+        "--queries",
+        help="Comma-separated list of queries to test (default: built-in test queries)"
+    ),
+    top_k: int = typer.Option(
+        5,
+        "--top-k",
+        help="Number of chunks to retrieve per query"
+    ),
+    embedding_model: str = typer.Option(
+        "sentence-transformers/all-MiniLM-L6-v2",
+        "--embedding-model",
+        help="Embedding model name"
+    ),
+    chunk_size: int = typer.Option(
+        512,
+        "--chunk-size",
+        help="Chunk size for token-based chunking"
+    ),
+    chunk_overlap: int = typer.Option(
+        50,
+        "--chunk-overlap",
+        help="Overlap for token-based chunking"
+    ),
+    meeting_limit: Optional[int] = typer.Option(
+        None,
+        "--meeting-limit",
+        help="Limit number of meetings to process (for faster testing)"
+    ),
+    output_dir: Optional[Path] = typer.Option(
+        None,
+        "--output-dir",
+        help="Directory to save index files (default: ./test_indices)"
+    )
+):
+    """Test semantic chunking vs token-based chunking on queries."""
+    test_semantic_chunking_command(
+        source_url=source_url,
+        queries=queries,
+        top_k=top_k,
+        embedding_model=embedding_model,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        meeting_limit=meeting_limit,
+        output_dir=output_dir
+    )
 
 
 def main():

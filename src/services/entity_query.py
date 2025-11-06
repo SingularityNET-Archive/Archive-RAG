@@ -17,6 +17,7 @@ from src.lib.config import (
 )
 from src.lib.logging import get_logger
 from src.services.entity_storage import load_entity, load_index
+from src.services.entity_normalization import EntityNormalizationService
 from src.models.meeting import Meeting
 from src.models.workgroup import Workgroup
 from src.models.person import Person
@@ -89,6 +90,50 @@ class EntityQueryService:
                 continue
         
         return None
+    
+    def find_by_name_variation(
+        self,
+        name: str,
+        entity_dir: Path,
+        entity_class: type[T],
+        name_field: str = "display_name"
+    ) -> Optional[T]:
+        """
+        Find entity by any name variation (supports normalization).
+        
+        Query by variation returns canonical entity (US3).
+        
+        Args:
+            name: Name variation to search for
+            entity_dir: Directory path for entity type
+            entity_class: Pydantic model class for entity
+            name_field: Field name to search (default: "display_name")
+        
+        Returns:
+            Canonical entity instance if found, None otherwise
+        """
+        normalization_service = EntityNormalizationService()
+        
+        # Load all entities for normalization matching
+        all_entities = self.find_all(entity_dir, entity_class)
+        
+        # Normalize the search name
+        try:
+            canonical_id, canonical_name = normalization_service.normalize_entity_name(
+                name,
+                all_entities
+            )
+            
+            # If found existing canonical entity, return it
+            if canonical_id.int != 0:
+                return self.get_by_id(canonical_id, entity_dir, entity_class)
+            
+            # Fallback to exact match search
+            return self.find_by_name(canonical_name, entity_dir, entity_class, name_field)
+        except Exception as e:
+            logger.warning("entity_query_normalization_failed", name=name, error=str(e))
+            # Fallback to exact match
+            return self.find_by_name(name, entity_dir, entity_class, name_field)
     
     def find_all(
         self,

@@ -1,15 +1,32 @@
 """Document chunking service for transcript splitting."""
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from uuid import UUID
 from ..models.meeting_record import MeetingRecord
 from ..lib.config import (
     DEFAULT_CHUNK_SIZE, 
     DEFAULT_CHUNK_OVERLAP,
-    ENTITIES_DECISION_ITEMS_DIR
+    ENTITIES_DECISION_ITEMS_DIR,
+    ENTITIES_MEETINGS_DIR,
+    ENTITIES_PEOPLE_DIR,
+    ENTITIES_WORKGROUPS_DIR,
+    ENTITIES_DOCUMENTS_DIR,
+    ENTITIES_ACTION_ITEMS_DIR,
+    ENTITIES_AGENDA_ITEMS_DIR,
 )
 from ..lib.logging import get_logger
 from ..services.entity_query import EntityQueryService
+from ..services.semantic_chunking import SemanticChunkingService
+from ..services.relationship_triple_generator import RelationshipTripleGenerator
+from ..services.entity_storage import load_entity
+from ..models.meeting import Meeting
+from ..models.person import Person
+from ..models.workgroup import Workgroup
+from ..models.document import Document
+from ..models.action_item import ActionItem
+from ..models.decision_item import DecisionItem
+from ..models.agenda_item import AgendaItem
+from ..models.chunk_metadata import ChunkMetadata
 
 logger = get_logger(__name__)
 
@@ -183,4 +200,159 @@ def extract_decision_text_for_rag(meeting_id: UUID) -> str:
             error=str(e)
         )
         raise
+
+
+def chunk_by_semantic_unit(
+    meeting_record: MeetingRecord,
+    meeting_id: Optional[UUID] = None,
+) -> List[ChunkMetadata]:
+    """
+    Chunk meeting content by semantic units with entity metadata.
+    
+    Creates chunks aligned with semantic boundaries (meeting summary, action item,
+    decision record, attendance, resource) rather than arbitrary token counts.
+    Each chunk includes embedded entity metadata and relationships.
+    
+    Args:
+        meeting_record: MeetingRecord to chunk
+        meeting_id: Optional UUID of the meeting (if not provided, will be derived or loaded)
+        
+    Returns:
+        List of ChunkMetadata objects with embedded entities and relationships
+    """
+    logger.info("semantic_chunking_start", meeting_id=str(meeting_id) if meeting_id else "unknown")
+    
+    # Determine meeting_id if not provided
+    if not meeting_id:
+        # Try to get meeting_id from meeting_record
+        if hasattr(meeting_record, 'id') and meeting_record.id:
+            try:
+                meeting_id = UUID(meeting_record.id) if isinstance(meeting_record.id, str) else meeting_record.id
+            except (ValueError, AttributeError):
+                logger.warning("semantic_chunking_no_meeting_id", meeting_record_id=meeting_record.id)
+                # Try to load meeting by workgroup_id and date
+                if hasattr(meeting_record, 'workgroup_id') and hasattr(meeting_record, 'date'):
+                    query_service = EntityQueryService()
+                    # This is a fallback - we'll try to find the meeting
+                    # For now, we'll proceed without meeting_id if we can't determine it
+                    pass
+    
+    if not meeting_id:
+        logger.warning("semantic_chunking_cannot_determine_meeting_id")
+        # Create a temporary UUID for chunking purposes
+        import uuid
+        meeting_id = uuid.uuid4()
+    
+    # Load all entities for this meeting
+    entities = _load_meeting_entities(meeting_id)
+    
+    # Generate relationship triples for this meeting
+    relationship_triples = []
+    try:
+        relationship_generator = RelationshipTripleGenerator()
+        relationship_triples = relationship_generator.generate_triples(entities, meeting_id)
+        logger.debug(
+            "relationship_triples_generated",
+            meeting_id=str(meeting_id),
+            count=len(relationship_triples),
+        )
+    except Exception as e:
+        logger.warning("relationship_triples_generation_failed", meeting_id=str(meeting_id), error=str(e))
+    
+    # Create semantic chunks using SemanticChunkingService
+    semantic_service = SemanticChunkingService()
+    chunks = semantic_service.chunk_by_semantic_unit(
+        meeting_record=meeting_record,
+        entities=entities,
+        meeting_id=meeting_id,
+        relationship_triples=relationship_triples,
+    )
+    
+    logger.info(
+        "semantic_chunking_complete",
+        meeting_id=str(meeting_id),
+        chunk_count=len(chunks),
+        entity_count=len(entities),
+    )
+    
+    return chunks
+
+
+def _load_meeting_entities(meeting_id: UUID) -> List:
+    """
+    Load all entities related to a meeting.
+    
+    Args:
+        meeting_id: UUID of the meeting
+        
+    Returns:
+        List of entity objects (Person, Workgroup, Meeting, Document, ActionItem, DecisionItem, AgendaItem)
+    """
+    entities = []
+    
+    try:
+        # Load meeting entity
+        meeting = load_entity(meeting_id, ENTITIES_MEETINGS_DIR, Meeting)
+        if meeting:
+            entities.append(meeting)
+            
+            # Load workgroup
+            if meeting.workgroup_id:
+                workgroup = load_entity(meeting.workgroup_id, ENTITIES_WORKGROUPS_DIR, Workgroup)
+                if workgroup:
+                    entities.append(workgroup)
+            
+            # Load people who attended the meeting
+            query_service = EntityQueryService()
+            people = query_service.get_people_by_meeting(meeting_id)
+            entities.extend(people)
+            
+            # Load documents for this meeting
+            documents = query_service.get_documents_by_meeting(meeting_id)
+            entities.extend(documents)
+            
+            # Load agenda items, action items, and decision items
+            agenda_items = []
+            for agenda_item_file in ENTITIES_AGENDA_ITEMS_DIR.glob("*.json"):
+                try:
+                    agenda_item_id = UUID(agenda_item_file.stem)
+                    agenda_item = load_entity(agenda_item_id, ENTITIES_AGENDA_ITEMS_DIR, AgendaItem)
+                    if agenda_item and agenda_item.meeting_id == meeting_id:
+                        agenda_items.append(agenda_item)
+                        entities.append(agenda_item)
+                except (ValueError, AttributeError):
+                    continue
+            
+            # Load action items for each agenda item
+            for agenda_item in agenda_items:
+                for action_item_file in ENTITIES_ACTION_ITEMS_DIR.glob("*.json"):
+                    try:
+                        action_item_id = UUID(action_item_file.stem)
+                        action_item = load_entity(action_item_id, ENTITIES_ACTION_ITEMS_DIR, ActionItem)
+                        if action_item and action_item.agenda_item_id == agenda_item.id:
+                            entities.append(action_item)
+                    except (ValueError, AttributeError):
+                        continue
+            
+            # Load decision items for each agenda item
+            for agenda_item in agenda_items:
+                for decision_item_file in ENTITIES_DECISION_ITEMS_DIR.glob("*.json"):
+                    try:
+                        decision_item_id = UUID(decision_item_file.stem)
+                        decision_item = load_entity(decision_item_id, ENTITIES_DECISION_ITEMS_DIR, DecisionItem)
+                        if decision_item and decision_item.agenda_item_id == agenda_item.id:
+                            entities.append(decision_item)
+                    except (ValueError, AttributeError):
+                        continue
+        
+    except Exception as e:
+        logger.warning("load_meeting_entities_failed", meeting_id=str(meeting_id), error=str(e))
+    
+    logger.debug(
+        "meeting_entities_loaded",
+        meeting_id=str(meeting_id),
+        entity_count=len(entities),
+    )
+    
+    return entities
 

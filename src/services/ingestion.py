@@ -106,7 +106,23 @@ def ingest_meeting_url(
         logger.info("fetching_url", url=url)
         with urllib.request.urlopen(url, timeout=30) as response:
             data_bytes = response.read()
-            data_text = data_bytes.decode('utf-8')
+            # T078 [Phase 9] Handle encoding errors gracefully
+            try:
+                data_text = data_bytes.decode('utf-8')
+            except UnicodeDecodeError:
+                # Try alternative encodings
+                try:
+                    data_text = data_bytes.decode('latin-1')
+                    logger.warning("encoding_fallback", url=url, encoding="latin-1")
+                except UnicodeDecodeError:
+                    logger.error("encoding_failed", url=url)
+                    raise ValueError(f"Failed to decode response from {url}")
+    except urllib.error.HTTPError as e:
+        logger.error("url_fetch_failed", url=url, error=f"HTTP {e.code}: {e.reason}")
+        raise ValueError(f"Failed to fetch URL {url}: HTTP {e.code}: {e.reason}")
+    except urllib.error.URLError as e:
+        logger.error("url_fetch_failed", url=url, error=str(e))
+        raise ValueError(f"Failed to fetch URL {url}: {e.reason}")
     except Exception as e:
         logger.error("url_fetch_failed", url=url, error=str(e))
         raise ValueError(f"Failed to fetch URL {url}: {e}")
@@ -146,8 +162,33 @@ def ingest_meeting_url(
     results = []
     for i, meeting_data in enumerate(meetings_data):
         try:
+            # T078 [Phase 9] Handle malformed JSON or missing required fields gracefully
+            if not isinstance(meeting_data, dict):
+                logger.warning(
+                    "meeting_data_not_dict",
+                    url=url,
+                    index=i,
+                    data_type=type(meeting_data).__name__
+                )
+                continue
+            
             # Create MeetingRecord from data
-            meeting_record = MeetingRecord(**meeting_data)
+            try:
+                meeting_record = MeetingRecord(**meeting_data)
+            except Exception as e:
+                # T078 [Phase 9] Log detailed error information for malformed data
+                logger.error(
+                    "meeting_record_creation_failed",
+                    url=url,
+                    index=i,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    has_workgroup_id="workgroup_id" in meeting_data,
+                    has_meeting_info="meetingInfo" in meeting_data,
+                    has_agenda_items="agendaItems" in meeting_data,
+                )
+                # Continue processing other meetings
+                continue
             
             # Use content hash (same for all from same URL)
             # But add index for uniqueness if needed
@@ -163,11 +204,14 @@ def ingest_meeting_url(
             
             results.append((meeting_record, meeting_hash))
         except Exception as e:
+            # T083 [Phase 9] Comprehensive logging with traceability
             logger.error(
                 "meeting_ingestion_failed_from_url",
                 url=url,
                 index=i,
-                error=str(e)
+                error=str(e),
+                error_type=type(e).__name__,
+                traceability=f"URL:{url}|INDEX:{i}",
             )
             # Continue processing other meetings
             continue
