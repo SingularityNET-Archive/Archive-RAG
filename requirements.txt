@@ -33,3 +33,7 @@ python-dateutil>=2.8.0
 # Discord Bot (for Archive-RAG Discord bot interface)
 discord.py>=2.3.0
 
+# Web Interface (for Archive-RAG web server)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+

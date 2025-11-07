@@ -152,3 +152,4 @@ class TestTopicsCommandNormalization:
             # Verify get_all_topics was called for normalization
             mock_entity_query_service.get_all_topics.assert_called_once()
 
+

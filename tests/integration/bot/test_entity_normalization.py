@@ -154,3 +154,4 @@ class TestTopicsCommandNormalizationIntegration:
         # Should return list (may be empty)
         assert isinstance(meetings, list)
 
+

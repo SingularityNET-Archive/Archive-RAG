@@ -17,6 +17,7 @@ from .bot import bot_command
 from .test_entity_extraction import test_entity_extraction_command
 from .test_semantic_chunking import test_semantic_chunking_command
 from .test_discord_bot_enhancements import app as test_discord_bot_app
+from .web import web_command
 
 app = typer.Typer(
     name="archive-rag",
@@ -270,6 +271,16 @@ def bot(
 ):
     """Start the Discord bot for Archive-RAG."""
     bot_command(token=token, index_name=index_name)
+
+
+@app.command()
+def web(
+    host: str = typer.Option("0.0.0.0", "--host", help="Host to bind to"),
+    port: int = typer.Option(8000, "--port", help="Port to bind to"),
+    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload for development")
+):
+    """Start the web server for Archive-RAG."""
+    web_command(host=host, port=port, reload=reload)
 
 
 @app.command()

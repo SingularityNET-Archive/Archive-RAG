@@ -290,3 +290,4 @@ class TestIssueStorage:
         assert len(all_reports) >= 3
 
 
+

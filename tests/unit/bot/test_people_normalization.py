@@ -186,3 +186,4 @@ class TestPeopleCommandNormalization:
             # Verify normalization was attempted
             mock_entity_query_service.find_all.assert_called_once()
 
+
