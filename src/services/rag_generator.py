@@ -1,6 +1,7 @@
 """RAG generation service using LLM with retrieved context (local or remote, opt-in)."""
 
 from typing import List, Dict, Any, Optional
+from uuid import UUID
 import torch
 
 from ..lib.config import DEFAULT_SEED
@@ -35,6 +36,8 @@ class RAGGenerator:
             seed: Random seed for reproducibility
             use_remote: Force remote/local mode (None = auto-detect from env)
         """
+        # Cache for meeting metadata (workgroup name, date) to avoid repeated lookups
+        self._meeting_metadata_cache: Dict[str, Dict[str, str]] = {}
         self.model_name = model_name or "gpt2"  # Default fallback
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu") if torch else "cpu"
         self.seed = seed
@@ -112,7 +115,7 @@ class RAGGenerator:
         self,
         query: str,
         retrieved_context: List[Dict[str, Any]],
-        max_length: int = 200
+        max_length: int = 1000
     ) -> str:
         """
         Generate answer from query and retrieved context.
@@ -135,14 +138,212 @@ class RAGGenerator:
             # Fail-fast on first violation
             raise violations[0]
         try:
-            # Assemble context from retrieved chunks
-            context_text = "\n\n".join([
-                f"[Meeting: {chunk.get('meeting_id', 'unknown')}]\n{chunk.get('text', '')}"
-                for chunk in retrieved_context
-            ])
+            # Detect if this is a decision list query
+            query_lower = query.lower()
+            is_decision_query = (
+                ("decision" in query_lower or "decisions" in query_lower or "decided" in query_lower) and
+                ("list" in query_lower or "what" in query_lower or "show" in query_lower)
+            )
             
-            # Create prompt
+            # For decision queries, increase max_length to allow for detailed decision listings
+            if is_decision_query:
+                max_length = max(max_length, 2000)  # At least 2000 tokens for decision queries
+            
+            # Assemble context from retrieved chunks with workgroup name and date
+            context_parts = []
+            meeting_ids_processed = set()  # Track meetings we've already processed
+            
+            for chunk in retrieved_context:
+                meeting_id = chunk.get('meeting_id', 'unknown')
+                metadata = chunk.get('metadata', {})
+                
+                # Check cache first
+                cached_metadata = self._meeting_metadata_cache.get(meeting_id)
+                if cached_metadata:
+                    workgroup_name = cached_metadata.get('workgroup_name', 'Unknown Workgroup')
+                    date = cached_metadata.get('date', 'Unknown Date')
+                else:
+                    # Extract workgroup name and date from metadata
+                    workgroup_name = metadata.get('workgroup') or metadata.get('workgroup_name')
+                    date = metadata.get('date', '')
+                    
+                    # If workgroup name not in metadata, try to look it up (lazy loading)
+                    if not workgroup_name and meeting_id and meeting_id != 'unknown':
+                        try:
+                            from ..services.citation_extractor import _get_workgroup_name_from_meeting
+                            workgroup_name = _get_workgroup_name_from_meeting(meeting_id)
+                        except Exception as e:
+                            logger.debug("workgroup_lookup_failed", meeting_id=meeting_id, error=str(e))
+                    
+                    # Fallback to unknown if still not found
+                    if not workgroup_name:
+                        workgroup_name = 'Unknown Workgroup'
+                    
+                    # Format date (extract date from ISO 8601 datetime if needed)
+                    if 'T' in date:
+                        date = date.split('T')[0]
+                    if not date:
+                        # Try to get date from chunk directly if not in metadata
+                        date = chunk.get('date', '')
+                        if 'T' in date:
+                            date = date.split('T')[0]
+                    
+                    # If date still missing, look up from meeting entity
+                    if not date and meeting_id and meeting_id != 'unknown':
+                        try:
+                            from ..services.entity_storage import load_entity
+                            from ..models.meeting import Meeting
+                            from ..lib.config import ENTITIES_MEETINGS_DIR
+                            
+                            meeting_uuid = UUID(meeting_id)
+                            meeting = load_entity(meeting_uuid, ENTITIES_MEETINGS_DIR, Meeting)
+                            if meeting and meeting.date:
+                                # Format date from meeting entity
+                                if hasattr(meeting.date, 'isoformat'):
+                                    date = meeting.date.isoformat()
+                                elif hasattr(meeting.date, 'strftime'):
+                                    date = meeting.date.strftime('%Y-%m-%d')
+                                else:
+                                    date = str(meeting.date)
+                                
+                                # Extract date part if datetime
+                                if 'T' in date:
+                                    date = date.split('T')[0]
+                                
+                                logger.debug(
+                                    "meeting_date_loaded_from_entity",
+                                    meeting_id=meeting_id,
+                                    date=date
+                                )
+                                
+                                # Also update workgroup name if we have the meeting
+                                if not workgroup_name or workgroup_name == 'Unknown Workgroup':
+                                    if meeting.workgroup_id:
+                                        from ..models.workgroup import Workgroup
+                                        from ..lib.config import ENTITIES_WORKGROUPS_DIR
+                                        workgroup = load_entity(meeting.workgroup_id, ENTITIES_WORKGROUPS_DIR, Workgroup)
+                                        if workgroup:
+                                            workgroup_name = workgroup.name
+                        except Exception as e:
+                            logger.debug(
+                                "meeting_date_lookup_failed",
+                                meeting_id=meeting_id,
+                                error=str(e)
+                            )
+                    
+                    if not date:
+                        date = 'Unknown Date'
+                        logger.warning(
+                            "meeting_date_missing",
+                            meeting_id=meeting_id,
+                            workgroup=workgroup_name
+                        )
+                    
+                    # Cache the metadata for future use
+                    self._meeting_metadata_cache[meeting_id] = {
+                        'workgroup_name': workgroup_name,
+                        'date': date
+                    }
+                
+                # Format date in a more readable format (YYYY-MM-DD is already readable, but ensure it's clear)
+                # The date format YYYY-MM-DD is clear and unambiguous
+                formatted_date = date
+                
+                # Format meeting identifier: "Workgroup Name - Date"
+                # Make it very clear and prominent in the prompt
+                meeting_identifier = f"{workgroup_name} - {formatted_date}"
+                
+                logger.debug(
+                    "meeting_context_formatted",
+                    meeting_id=meeting_id,
+                    identifier=meeting_identifier
+                )
+                
+                # Get chunk text
+                chunk_text = chunk.get('text', '')
+                
+                # For decision queries, enhance context with actual decision items
+                if is_decision_query and meeting_id and meeting_id != 'unknown' and meeting_id not in meeting_ids_processed:
+                    try:
+                        from ..services.entity_query import EntityQueryService
+                        
+                        meeting_uuid = UUID(meeting_id)
+                        entity_query = EntityQueryService()
+                        decision_items = entity_query.get_decision_items_by_meeting(meeting_uuid)
+                        
+                        if decision_items:
+                            # Build decision text from decision items
+                            decision_texts = []
+                            for decision_item in decision_items:
+                                if decision_item.decision and decision_item.decision.strip():
+                                    decision_text = decision_item.decision.strip()
+                                    # Include rationale if available
+                                    if decision_item.rationale and decision_item.rationale.strip():
+                                        decision_text += f" (Rationale: {decision_item.rationale.strip()})"
+                                    decision_texts.append(decision_text)
+                            
+                            if decision_texts:
+                                # Replace or enhance chunk text with actual decision content
+                                if not chunk_text or len(chunk_text.strip()) < 50:
+                                    # If chunk text is minimal, replace it with decision content
+                                    chunk_text = "Decisions made:\n" + "\n".join(f"- {dt}" for dt in decision_texts)
+                                else:
+                                    # If chunk text exists, append decision content
+                                    chunk_text += "\n\nDecisions made:\n" + "\n".join(f"- {dt}" for dt in decision_texts)
+                            
+                            logger.debug(
+                                "decision_content_loaded_for_rag",
+                                meeting_id=meeting_id,
+                                decision_count=len(decision_items)
+                            )
+                        
+                        meeting_ids_processed.add(meeting_id)
+                    except Exception as e:
+                        logger.debug(
+                            "failed_to_load_decisions_for_rag",
+                            meeting_id=meeting_id,
+                            error=str(e)
+                        )
+                        # Continue with original chunk text if decision loading fails
+                
+                # Include both meeting ID and human-readable identifier
+                context_parts.append(
+                    f"[Meeting: {meeting_id} | {meeting_identifier}]\n{chunk_text}"
+                )
+            
+            context_text = "\n\n".join(context_parts)
+            
+            # Create prompt with explicit instructions to identify meetings
+            decision_instructions = ""
+            if is_decision_query:
+                decision_instructions = """
+
+CRITICAL INSTRUCTIONS FOR DECISION QUERIES:
+- You MUST list the SPECIFIC decisions that were made in each meeting
+- For each meeting, clearly state what decisions were made
+- Do NOT just say "decisions were made" - you MUST specify what those decisions were
+- Use the decision text provided in the meeting records
+- Format: "In the [Workgroup Name - Date] meeting, the following decisions were made: [list decisions]"
+"""
+            
             prompt = f"""Based on the following meeting records, answer the question.
+
+CRITICAL INSTRUCTIONS FOR MEETING REFERENCES:
+- You MUST include BOTH the workgroup name AND the date when referencing any meeting
+- Format: "Workgroup Name - YYYY-MM-DD" (e.g., "Governance Workgroup - 2025-03-15")
+- NEVER reference a meeting with just the workgroup name (e.g., "Governance Workgroup" alone is WRONG)
+- NEVER use generic terms like "first meeting", "second meeting", "the meeting", etc.
+- ALWAYS use the exact format shown in the meeting records: "Workgroup Name - Date"
+
+Example of CORRECT format:
+"In the Governance Workgroup - 2025-03-15 meeting, it was decided..."
+"The Archives Workgroup - 2025-04-20 meeting noted that..."
+
+Example of WRONG format (DO NOT USE):
+"In the Governance Workgroup meeting..." (missing date)
+"In the first meeting..." (too generic)
+"The Archives Workgroup decided..." (missing date)
+{decision_instructions}
 
 Meeting Records:
 {context_text}

@@ -115,6 +115,30 @@ class ArchiveRAGBot(discord.Client):
                 entity_query_service=self.entity_query_service
             )
             
+            # Register relationships command
+            from .commands.relationships import register_relationships_command
+            from .services.relationship_query_service import create_relationship_query_service
+            register_relationships_command(
+                bot=self,
+                rate_limiter=self.rate_limiter,
+                permission_checker=self.permission_checker,
+                message_formatter=self.message_formatter,
+                relationship_query_service=create_relationship_query_service()
+            )
+            
+            # Register reports command (admin dashboard)
+            from .commands.reports import register_reports_command
+            register_reports_command(
+                bot=self,
+                rate_limiter=self.rate_limiter,
+                permission_checker=self.permission_checker,
+                message_formatter=self.message_formatter,
+            )
+            
+            # Register help command
+            from .commands.help import register_help_command
+            register_help_command(bot=self)
+
             self._commands_registered = True
     
     async def on_ready(self) -> None:
@@ -134,6 +158,7 @@ class ArchiveRAGBot(discord.Client):
         
         # Sync command tree with Discord
         try:
+            # First, try to sync to all guilds (global sync)
             synced = await self.tree.sync()
             synced_command_names = [cmd.name for cmd in synced]
             logger.info(
@@ -141,6 +166,25 @@ class ArchiveRAGBot(discord.Client):
                 synced_count=len(synced),
                 command_names=synced_command_names
             )
+            
+            # Also sync to each guild for faster availability (for testing)
+            # Note: Global sync can take up to 1 hour, guild sync is immediate
+            for guild in self.guilds:
+                try:
+                    self.tree.copy_global_to(guild=guild)
+                    synced_guild = await self.tree.sync(guild=guild)
+                    logger.debug(
+                        "bot_commands_synced_to_guild",
+                        guild_id=str(guild.id),
+                        guild_name=guild.name,
+                        synced_count=len(synced_guild)
+                    )
+                except Exception as guild_error:
+                    logger.debug(
+                        "bot_guild_sync_failed",
+                        guild_id=str(guild.id),
+                        error=str(guild_error)
+                    )
         except Exception as e:
             logger.error("bot_command_sync_failed", error=str(e))
         

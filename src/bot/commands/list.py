@@ -257,7 +257,17 @@ class ListCommand:
                         timeout=30.0
                     )
                     response_text = self._format_topics_list(topics)
-                    await interaction.followup.send(response_text)
+                    # Create issue report button view
+                    report_button_view = self.message_formatter.create_issue_report_button_view(
+                        query_text=f"/archive list query:\"{query}\"",
+                        response_text=response_text,
+                        citations=[],
+                        message_id=None,
+                    )
+                    message = await interaction.followup.send(response_text, view=report_button_view)
+                    # Update button view with message ID
+                    if report_button_view:
+                        report_button_view.message_id = str(message.id)
                     
                     execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
                     execution_time_seconds = execution_time_ms / 1000.0
@@ -313,7 +323,17 @@ class ListCommand:
                     )
                     
                     response_text = self._format_meetings_list(meetings)
-                    await interaction.followup.send(response_text)
+                    # Create issue report button view
+                    report_button_view = self.message_formatter.create_issue_report_button_view(
+                        query_text=f"/archive list query:\"{query}\"",
+                        response_text=response_text,
+                        citations=[],
+                        message_id=None,
+                    )
+                    message = await interaction.followup.send(response_text, view=report_button_view)
+                    # Update button view with message ID
+                    if report_button_view:
+                        report_button_view.message_id = str(message.id)
                     
                     execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
                     execution_time_seconds = execution_time_ms / 1000.0

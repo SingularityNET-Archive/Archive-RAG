@@ -1,10 +1,12 @@
 """Quantitative query service for answering questions that require counting or aggregation from raw data."""
 
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from uuid import UUID
 import json
 import urllib.request
+import re
+from datetime import datetime
 
 from src.lib.config import (
     ENTITIES_MEETINGS_DIR,
@@ -454,6 +456,60 @@ class QuantitativeQueryService:
             "citations": []
         }
     
+    def _parse_date_from_query(self, question: str) -> Tuple[Optional[int], Optional[int]]:
+        """
+        Parse year and month from natural language query.
+        
+        Examples:
+            "January 2025" -> (2025, 1)
+            "2025" -> (2025, None)
+            "meetings in March" -> (None, 3)
+        
+        Args:
+            question: Natural language query text
+            
+        Returns:
+            Tuple of (year, month) or (None, None) if not found
+        """
+        question_lower = question.lower()
+        
+        # Month names mapping
+        months = {
+            'january': 1, 'jan': 1,
+            'february': 2, 'feb': 2,
+            'march': 3, 'mar': 3,
+            'april': 4, 'apr': 4,
+            'may': 5,
+            'june': 6, 'jun': 6,
+            'july': 7, 'jul': 7,
+            'august': 8, 'aug': 8,
+            'september': 9, 'sep': 9, 'sept': 9,
+            'october': 10, 'oct': 10,
+            'november': 11, 'nov': 11,
+            'december': 12, 'dec': 12
+        }
+        
+        year = None
+        month = None
+        
+        # Find year (4-digit number)
+        year_match = re.search(r'\b(19|20)\d{2}\b', question)
+        if year_match:
+            year = int(year_match.group())
+        
+        # Find month name
+        for month_name, month_num in months.items():
+            if month_name in question_lower:
+                month = month_num
+                break
+        
+        # If month found but no year, try to find current year context
+        if month and not year:
+            # Use current year as default
+            year = datetime.now().year
+        
+        return year, month
+    
     def answer_quantitative_question(self, question: str, source_url: Optional[str] = None) -> Dict[str, Any]:
         """
         Analyze question and provide quantitative answer with data source citations.
@@ -528,8 +584,11 @@ class QuantitativeQueryService:
                     }]
                 }
         
-        # Check for workgroup questions (only if not asking about decisions)
-        if "workgroup" in question_lower and ("how many" in question_lower or "count" in question_lower or "number" in question_lower):
+        # Check for workgroup count questions (only if NOT asking about meetings for a specific workgroup)
+        # This handles "How many workgroups are there?" but NOT "How many meetings has [workgroup] held?"
+        if ("workgroup" in question_lower and 
+            ("how many" in question_lower or "count" in question_lower or "number" in question_lower) and
+            "meeting" not in question_lower and "held" not in question_lower):
             workgroup_stats = self.get_meeting_statistics()
             workgroup_count = len(workgroup_stats.get("meetings_by_workgroup", {}))
             return {
@@ -803,6 +862,162 @@ class QuantitativeQueryService:
         
         # Detect question type - meetings
         if any(pattern in question_lower for pattern in ["meeting", "how many", "count", "number of", "total"]):
+            # Check if question is asking about meetings for a specific workgroup
+            if "workgroup" in question_lower and ("meeting" in question_lower or "held" in question_lower):
+                from ..services.entity_query import EntityQueryService
+                from ..services.entity_storage import load_entity
+                from ..models.workgroup import Workgroup
+                from ..services.entity_normalization import EntityNormalizationService
+                
+                entity_query = EntityQueryService()
+                normalization_service = EntityNormalizationService()
+                
+                # Try to extract workgroup name from question
+                workgroup_keywords = [
+                    "governance", "archives", "education", "gamers", "github", 
+                    "treasury", "knowledge", "latam", "moderators", "onboarding",
+                    "process", "strategy", "pbl", "ethics", "ai", "archive"
+                ]
+                
+                workgroup_id = None
+                workgroup_name = None
+                
+                # Check if question contains workgroup name
+                # Optimize: Use index file to find workgroup faster instead of loading all workgroups
+                for keyword in workgroup_keywords:
+                    if keyword in question_lower:
+                        workgroups_dir = ENTITIES_WORKGROUPS_DIR
+                        
+                        # Try direct file search first (faster than loading all)
+                        workgroup_found = False
+                        for wg_file in workgroups_dir.glob("*.json"):
+                            try:
+                                wg_uuid = UUID(wg_file.stem)
+                                workgroup = load_entity(wg_uuid, workgroups_dir, Workgroup)
+                                if workgroup and (keyword.lower() in workgroup.name.lower() or workgroup.name.lower() in keyword.lower()):
+                                    workgroup_id = workgroup.id
+                                    workgroup_name = workgroup.name
+                                    workgroup_found = True
+                                    break
+                            except (ValueError, AttributeError, Exception):
+                                continue
+                        
+                        if workgroup_found:
+                            break
+                        
+                        # If direct search didn't find it, try normalization (slower but more accurate)
+                        if not workgroup_id:
+                            try:
+                                all_workgroups = entity_query.find_all(workgroups_dir, Workgroup)
+                                normalized_id, normalized_name = normalization_service.normalize_entity_name(
+                                    keyword,
+                                    existing_entities=all_workgroups,
+                                    context={}
+                                )
+                                if normalized_id.int != 0:
+                                    workgroup = entity_query.get_by_id(normalized_id, workgroups_dir, Workgroup)
+                                    if workgroup:
+                                        workgroup_id = workgroup.id
+                                        workgroup_name = workgroup.name
+                                        break
+                            except Exception:
+                                pass
+                        
+                        if workgroup_id:
+                            break
+                
+                # If workgroup found, count meetings for that workgroup
+                if workgroup_id:
+                    # Parse date filters from query
+                    year, month = self._parse_date_from_query(question)
+                    
+                    # Get meetings for workgroup
+                    meetings = entity_query.get_meetings_by_workgroup(workgroup_id)
+                    
+                    # Filter by date if date filters are present
+                    if year is not None or month is not None:
+                        from datetime import date
+                        # Calculate date range
+                        if month is not None:
+                            # Specific month/year
+                            start_date = date(year, month, 1)
+                            # Get first day of next month (exclusive end)
+                            if month == 12:
+                                end_date = date(year + 1, 1, 1)
+                            else:
+                                end_date = date(year, month + 1, 1)
+                        else:
+                            # Entire year
+                            start_date = date(year, 1, 1)
+                            end_date = date(year + 1, 1, 1)
+                        
+                        # Filter meetings by date range
+                        meetings = [
+                            m for m in meetings
+                            if start_date <= m.date < end_date
+                        ]
+                    
+                    count = len(meetings)
+                    
+                    # Build answer with date context if applicable
+                    date_context = ""
+                    if year and month:
+                        month_names = {
+                            1: "January", 2: "February", 3: "March", 4: "April",
+                            5: "May", 6: "June", 7: "July", 8: "August",
+                            9: "September", 10: "October", 11: "November", 12: "December"
+                        }
+                        date_context = f" in {month_names[month]} {year}"
+                    elif year:
+                        date_context = f" in {year}"
+                    
+                    # Build method description
+                    method_parts = [f"Counted meetings from meetings_by_workgroup index for workgroup '{workgroup_name}'"]
+                    if year or month:
+                        if year and month:
+                            method_parts.append(f"filtered by {month_names[month]} {year}")
+                        elif year:
+                            method_parts.append(f"filtered by year {year}")
+                    method = " - ".join(method_parts)
+                    
+                    return {
+                        "answer": f"The {workgroup_name} workgroup has held {count} meeting(s){date_context}.",
+                        "count": count,
+                        "workgroup_id": str(workgroup_id),
+                        "workgroup_name": workgroup_name,
+                        "year": year,
+                        "month": month,
+                        "meetings": meetings,  # Include the actual Meeting objects
+                        "source": "Entity storage JSON files",
+                        "method": method,
+                        "citations": [{
+                            "type": "data_source",
+                            "description": f"Counted {count} meetings for {workgroup_name} workgroup{date_context}",
+                            "method": "Entity query - filtered by workgroup" + (f" and date ({year}, {month})" if year or month else ""),
+                            "workgroup_id": str(workgroup_id),
+                            "workgroup_name": workgroup_name,
+                            "meeting_count": count,
+                            "year": year,
+                            "month": month
+                        }]
+                    }
+                else:
+                    # Workgroup not found - return helpful message
+                    workgroup_stats = self.get_meeting_statistics()
+                    workgroups = workgroup_stats.get("meetings_by_workgroup", {})
+                    
+                    return {
+                        "answer": f"Could not identify a specific workgroup from your question. There are {len(workgroups)} workgroups in the archive. Please specify the workgroup name (e.g., 'Archives Workgroup', 'Governance Workgroup') or use '/archive relationships workgroup:\"workgroup name\"' to find workgroup information.",
+                        "count": 0,
+                        "method": "Workgroup meeting count - requires workgroup identification",
+                        "source": "Entity storage",
+                        "citations": [{
+                            "type": "info",
+                            "description": f"Found {len(workgroups)} workgroups. Please specify which workgroup you're asking about.",
+                            "method": "Workgroup count from index"
+                        }]
+                    }
+            
             # Check if question mentions a source URL
             if source_url is None:
                 # Try to extract URL from question

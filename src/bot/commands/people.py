@@ -13,6 +13,7 @@ from ..services.rate_limiter import RateLimiter
 from ..services.permission_checker import PermissionChecker
 from ..services.message_formatter import MessageFormatter
 from src.services.entity_query import EntityQueryService
+from src.services.entity_normalization import EntityNormalizationService
 from src.lib.config import ENTITIES_PEOPLE_DIR
 from src.models.person import Person
 from src.lib.logging import get_logger
@@ -24,7 +25,7 @@ class PeopleCommand:
     """
     Command handler for /archive people slash command.
     
-    Handles people/participant searches in archived meetings (contributor+ only).
+    Handles people/participant searches in archived meetings (public access).
     """
     
     def __init__(
@@ -33,7 +34,8 @@ class PeopleCommand:
         rate_limiter: RateLimiter,
         permission_checker: PermissionChecker,
         message_formatter: MessageFormatter,
-        entity_query_service: EntityQueryService
+        entity_query_service: EntityQueryService,
+        normalization_service: EntityNormalizationService = None
     ):
         """
         Initialize people command handler.
@@ -44,12 +46,14 @@ class PeopleCommand:
             permission_checker: Permission checker service
             message_formatter: Message formatter service
             entity_query_service: Entity query service
+            normalization_service: Optional entity normalization service
         """
         self.bot = bot
         self.rate_limiter = rate_limiter
         self.permission_checker = permission_checker
         self.message_formatter = message_formatter
         self.entity_query_service = entity_query_service
+        self.normalization_service = normalization_service or EntityNormalizationService()
     
     def _create_discord_user(self, interaction: discord.Interaction) -> DiscordUser:
         """
@@ -75,20 +79,93 @@ class PeopleCommand:
             roles=roles
         )
     
-    def _format_people_response(self, person: Person, meetings: list) -> str:
+    def _get_name_variations(self, canonical_name: str, all_people: list) -> tuple[list, list]:
+        """
+        Get all name variations and person IDs that normalize to the canonical name.
+        
+        Args:
+            canonical_name: Canonical entity name
+            all_people: List of all Person entities
+            
+        Returns:
+            Tuple of (name_variations_list, person_ids_list)
+            - name_variations: List of name variations (display_name and alias) that normalize to canonical_name
+            - person_ids: List of person IDs that normalize to canonical_name
+        """
+        variations = []
+        person_ids = []
+        if not canonical_name:
+            return variations, person_ids
+        
+        for person in all_people:
+            try:
+                # Check if this person normalizes to the same canonical name
+                normalized_id, normalized_name = self.normalization_service.normalize_entity_name(
+                    person.display_name,
+                    existing_entities=all_people,
+                    context={}
+                )
+                
+                if normalized_name.lower() == canonical_name.lower():
+                    # This person normalizes to the same canonical name
+                    if person.display_name not in variations:
+                        variations.append(person.display_name)
+                    if person.alias and person.alias not in variations:
+                        variations.append(person.alias)
+                    # Add person ID to list
+                    if person.id not in person_ids:
+                        person_ids.append(person.id)
+            except Exception:
+                # If normalization fails for this person, skip it
+                continue
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_variations = []
+        for v in variations:
+            if v and v.lower() not in seen:
+                seen.add(v.lower())
+                unique_variations.append(v)
+        
+        return unique_variations, person_ids
+    
+    def _format_people_response(
+        self,
+        person: Person,
+        meetings: list,
+        original_query: str = None,
+        canonical_name: str = None,
+        name_variations: list = None
+    ) -> str:
         """
         Format people search results for Discord.
         
         Args:
             person: Person entity found
             meetings: List of Meeting entities (limited to top 5)
+            original_query: Original search query (for showing normalization)
+            canonical_name: Normalized canonical name (if different from person.display_name)
+            name_variations: List of name variations that normalized to canonical name
             
         Returns:
             Formatted response text
         """
-        response_lines = [f"**Person:** {person.display_name}"]
+        response_lines = []
         
-        if person.alias:
+        # Show normalized name if normalization occurred
+        if canonical_name and canonical_name != person.display_name:
+            response_lines.append(f"**Person:** {canonical_name} (normalized from '{original_query}')")
+        else:
+            response_lines.append(f"**Person:** {person.display_name}")
+        
+        # Show name variations if available
+        if name_variations and len(name_variations) > 1:
+            variations_text = ", ".join([f"'{v}'" for v in name_variations if v != canonical_name])
+            if variations_text:
+                response_lines.append(f"**Name variations:** {variations_text}")
+        
+        # Show alias if different from display_name
+        if person.alias and person.alias != person.display_name:
             response_lines.append(f"**Alias:** {person.alias}")
         
         if person.role:
@@ -139,7 +216,7 @@ class PeopleCommand:
             # Send immediate acknowledgment
             await interaction.response.send_message("Processing your people search...")
             
-            # Check permissions (contributor+ required)
+            # Check permissions (public access - check still performed for consistency)
             if not self.permission_checker.has_permission(discord_user, "archive people"):
                 error_message = self.message_formatter.format_error_message("permission_denied")
                 await interaction.followup.send(error_message)
@@ -170,39 +247,122 @@ class PeopleCommand:
             # Record query for rate limiting
             self.rate_limiter.record_query(discord_user.user_id)
             
-            # Find person by name (case-insensitive search)
-            # Try display_name first, then alias
+            # Try to normalize entity name first
             person_entity = None
+            canonical_name = None
+            name_variations = []
+            related_person_ids = []  # Store person IDs that normalize to same canonical name
+            normalization_failed = False
+            
             try:
-                # Search by display_name with timeout
-                person_entity = await asyncio.wait_for(
+                # Load all people for normalization
+                all_people = await asyncio.wait_for(
                     asyncio.to_thread(
-                        self.entity_query_service.find_by_name,
-                        person,
+                        self.entity_query_service.find_all,
                         ENTITIES_PEOPLE_DIR,
-                        Person,
-                        "display_name"
+                        Person
                     ),
-                    timeout=30.0  # 30 second timeout
+                    timeout=30.0
                 )
                 
-                # If not found, try searching by alias
-                if not person_entity:
-                    all_people = await asyncio.wait_for(
+                # Try normalization
+                try:
+                    normalized_id, canonical_name = await asyncio.wait_for(
                         asyncio.to_thread(
-                            self.entity_query_service.find_all,
-                            ENTITIES_PEOPLE_DIR,
-                            Person
+                            self.normalization_service.normalize_entity_name,
+                            person,
+                            all_people,
+                            {}
                         ),
-                        timeout=30.0
+                        timeout=10.0
                     )
-                    # Case-insensitive search
-                    person_lower = person.lower()
-                    for p in all_people:
-                        if (p.display_name and person_lower in p.display_name.lower()) or \
-                           (p.alias and person_lower in p.alias.lower()):
-                            person_entity = p
-                            break
+                    
+                    # If normalization returned a valid entity ID, use it
+                    if normalized_id.int != 0:
+                        person_entity = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                self.entity_query_service.get_by_id,
+                                normalized_id,
+                                ENTITIES_PEOPLE_DIR,
+                                Person
+                            ),
+                            timeout=10.0
+                        )
+                        
+                        # Get all name variations and person IDs that normalize to this canonical name
+                        if person_entity:
+                            name_variations, related_person_ids = await asyncio.wait_for(
+                                asyncio.to_thread(
+                                    self._get_name_variations,
+                                    canonical_name,
+                                    all_people
+                                ),
+                                timeout=10.0
+                            )
+                    else:
+                        # Normalization didn't find existing entity, try exact match
+                        normalization_failed = True
+                except Exception as norm_error:
+                    logger.debug(
+                        "people_normalization_failed",
+                        user_id=discord_user.user_id,
+                        person=person,
+                        error=str(norm_error)
+                    )
+                    normalization_failed = True
+                
+                # If normalization failed or didn't find entity, try exact match
+                if not person_entity:
+                    # Try exact match by display_name
+                    person_entity = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            self.entity_query_service.find_by_name,
+                            person,
+                            ENTITIES_PEOPLE_DIR,
+                            Person,
+                            "display_name"
+                        ),
+                        timeout=10.0
+                    )
+                    
+                    # If not found, try case-insensitive search in all people
+                    if not person_entity:
+                        person_lower = person.lower()
+                        for p in all_people:
+                            if (p.display_name and person_lower in p.display_name.lower()) or \
+                               (p.alias and person_lower in p.alias.lower()):
+                                person_entity = p
+                                break
+                    
+                    # If still not found, try fuzzy matching for suggestions
+                    if not person_entity:
+                        suggestions = []
+                        for p in all_people:
+                            if p.display_name:
+                                # Simple similarity check
+                                if person_lower in p.display_name.lower() or \
+                                   p.display_name.lower() in person_lower:
+                                    suggestions.append(p.display_name)
+                        
+                        error_message = f"No person found matching '{person}'."
+                        if suggestions:
+                            error_message += f"\n\nDid you mean: {', '.join(suggestions[:3])}?"
+                        else:
+                            error_message += "\n\nTry checking the spelling or using a different search term."
+                        
+                        await interaction.followup.send(error_message)
+                        logger.info(
+                            "people_no_results",
+                            user_id=discord_user.user_id,
+                            person=person,
+                            suggestions=suggestions[:3] if suggestions else []
+                        )
+                        return
+                    
+                    # Use display_name as canonical if normalization failed
+                    if normalization_failed:
+                        canonical_name = person_entity.display_name
+                        
             except asyncio.TimeoutError:
                 error_occurred = True
                 await interaction.followup.send(
@@ -227,25 +387,45 @@ class PeopleCommand:
                 )
                 return
             
-            if not person_entity:
-                error_message = f"No person found matching '{person}'. Try a different search term."
-                await interaction.followup.send(error_message)
-                logger.info(
-                    "people_no_results",
-                    user_id=discord_user.user_id,
-                    person=person
-                )
-                return
-            
             # Get meetings for this person
+            # If we have related person IDs (from normalization), search all of them
             try:
-                meetings = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        self.entity_query_service.get_meetings_by_person,
-                        person_entity.id
-                    ),
-                    timeout=30.0  # 30 second timeout
-                )
+                all_meetings = []
+                person_ids_to_search = [person_entity.id]
+                
+                # Add related person IDs if we found them during normalization
+                if related_person_ids:
+                    person_ids_to_search.extend(related_person_ids)
+                    # Remove duplicates
+                    seen_ids = set()
+                    unique_person_ids = []
+                    for pid in person_ids_to_search:
+                        if pid not in seen_ids:
+                            seen_ids.add(pid)
+                            unique_person_ids.append(pid)
+                    person_ids_to_search = unique_person_ids
+                
+                # Get meetings for all person IDs
+                for person_id in person_ids_to_search:
+                    person_meetings = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            self.entity_query_service.get_meetings_by_person,
+                            person_id
+                        ),
+                        timeout=30.0
+                    )
+                    all_meetings.extend(person_meetings)
+                
+                # Remove duplicate meetings (by ID)
+                seen_meeting_ids = set()
+                meetings = []
+                for meeting in all_meetings:
+                    if meeting.id not in seen_meeting_ids:
+                        seen_meeting_ids.add(meeting.id)
+                        meetings.append(meeting)
+                
+                # Sort by date (most recent first)
+                meetings.sort(key=lambda m: m.date if m.date else "", reverse=True)
             except asyncio.TimeoutError:
                 error_occurred = True
                 await interaction.followup.send(
@@ -271,8 +451,24 @@ class PeopleCommand:
                 return
             
             # Format and send response
-            response_text = self._format_people_response(person_entity, meetings)
-            await interaction.followup.send(response_text)
+            response_text = self._format_people_response(
+                person_entity,
+                meetings,
+                original_query=person,
+                canonical_name=canonical_name or person_entity.display_name,
+                name_variations=name_variations if name_variations else [person_entity.display_name]
+            )
+            # Create issue report button view
+            report_button_view = self.message_formatter.create_issue_report_button_view(
+                query_text=f"/archive people person:\"{person}\"",
+                response_text=response_text,
+                citations=[],  # People command doesn't have citations in RAGQuery format
+                message_id=None,
+            )
+            message = await interaction.followup.send(response_text, view=report_button_view)
+            # Update button view with message ID
+            if report_button_view:
+                report_button_view.message_id = str(message.id)
             
             # Audit logging and Performance Monitoring (T035, T047)
             execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
@@ -362,7 +558,7 @@ def register_people_command(
         bot.tree.add_command(archive_group)
     
     # Register people command
-    @archive_group.command(name="people", description="Search for people/participants in archived meetings (contributor+)")
+    @archive_group.command(name="people", description="Search for people/participants in archived meetings")
     async def people_command(interaction: discord.Interaction, person: str):
         """Execute /archive people command."""
         await command_handler.handle_people_command(interaction, person)

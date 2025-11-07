@@ -5,10 +5,12 @@ from typing import Optional, Union
 import typer
 
 from ..services.ingestion import ingest_meeting_directory
-from ..services.chunking import chunk_transcript
+from ..services.chunking import chunk_transcript, chunk_by_semantic_unit, DocumentChunk
+from ..services.meeting_to_entity import convert_and_save_meeting_record
 from ..services.embedding import create_embedding_service
 from ..services.index_builder import build_faiss_index, save_index
 from ..services.audit_writer import AuditWriter
+from ..models.chunk_metadata import ChunkMetadata
 from ..lib.config import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_CHUNK_SIZE,
@@ -58,10 +60,20 @@ def index_command(
         True,
         "--redact-pii/--no-redact-pii",
         help="Enable PII detection and redaction"
+    ),
+    semantic: bool = typer.Option(
+        False,
+        "--semantic/--no-semantic",
+        help="Use semantic chunking instead of token-based chunking (includes chunk_type, entities, relationships)"
     )
 ):
     """
     Ingest meeting JSON files and create FAISS vector index.
+    
+    Use --semantic flag to enable semantic chunking which includes:
+    - Chunk type classification (meeting_summary, decision_record, action_item, etc.)
+    - Entity extraction and normalization
+    - Relationship triples
     """
     try:
         # Initialize embedding service
@@ -97,17 +109,72 @@ def index_command(
             return
         
         # Chunk transcripts
-        typer.echo("Chunking transcripts...", nl=False)
-        typer.echo(" ", nl=True)  # Force flush
-        all_chunks = []
-        for i, (meeting_record, file_hash) in enumerate(meeting_records, 1):
-            chunks = chunk_transcript(
-                meeting_record,
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap
-            )
-            all_chunks.extend(chunks)
-            typer.echo(f"  ✓ Meeting {i}/{len(meeting_records)}: {meeting_record.id} -> {len(chunks)} chunks", err=False)
+        if semantic:
+            typer.echo("Chunking with semantic chunking (extracting entities and relationships)...", nl=False)
+            typer.echo(" ", nl=True)  # Force flush
+            all_chunks = []
+            for i, (meeting_record, file_hash) in enumerate(meeting_records, 1):
+                # Extract and save entities first
+                meeting_entity = convert_and_save_meeting_record(meeting_record)
+                meeting_id = str(meeting_entity.id)
+                
+                # Create semantic chunks
+                semantic_chunks = chunk_by_semantic_unit(
+                    meeting_record=meeting_record,
+                    meeting_id=meeting_entity.id,
+                )
+                
+                # Convert ChunkMetadata to DocumentChunk for indexing
+                for chunk in semantic_chunks:
+                    # Extract metadata from ChunkMetadata
+                    metadata = {
+                        "meeting_id": meeting_id,
+                        "chunk_type": chunk.metadata.chunk_type,
+                        "source_field": chunk.metadata.source_field,
+                        "entities": [
+                            {
+                                "entity_id": str(e.entity_id),
+                                "entity_type": e.entity_type,
+                                "normalized_name": e.normalized_name,
+                                "mentions": e.mentions
+                            }
+                            for e in chunk.entities
+                        ],
+                        "relationships": [
+                            {
+                                "subject": r.subject,
+                                "relationship": r.relationship,
+                                "object": r.object
+                            }
+                            for r in chunk.metadata.relationships
+                        ],
+                        "chunk_index": chunk.metadata.chunk_index or 0,
+                        "total_chunks": chunk.metadata.total_chunks or 1,
+                    }
+                    
+                    doc_chunk = DocumentChunk(
+                        text=chunk.text,
+                        chunk_index=chunk.metadata.chunk_index or 0,
+                        meeting_id=meeting_id,
+                        start_idx=0,
+                        end_idx=len(chunk.text),
+                        metadata=metadata
+                    )
+                    all_chunks.append(doc_chunk)
+                
+                typer.echo(f"  ✓ Meeting {i}/{len(meeting_records)}: {meeting_record.id} -> {len(semantic_chunks)} semantic chunks", err=False)
+        else:
+            typer.echo("Chunking transcripts with token-based chunking...", nl=False)
+            typer.echo(" ", nl=True)  # Force flush
+            all_chunks = []
+            for i, (meeting_record, file_hash) in enumerate(meeting_records, 1):
+                chunks = chunk_transcript(
+                    meeting_record,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap
+                )
+                all_chunks.extend(chunks)
+                typer.echo(f"  ✓ Meeting {i}/{len(meeting_records)}: {meeting_record.id} -> {len(chunks)} chunks", err=False)
         
         typer.echo(f"✓ Created {len(all_chunks)} total chunks from {len(meeting_records)} meetings")
         
@@ -140,6 +207,7 @@ def index_command(
                 "embedding_model": embedding_model,
                 "chunk_size": chunk_size,
                 "chunk_overlap": chunk_overlap,
+                "chunking_method": "semantic" if semantic else "token-based",
                 "total_meetings": len(meeting_records),
                 "total_chunks": len(all_chunks),
                 "embedding_dimension": embedding_index.embedding_dimension

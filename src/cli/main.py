@@ -16,6 +16,7 @@ from .backfill_tags import backfill_tags_command
 from .bot import bot_command
 from .test_entity_extraction import test_entity_extraction_command
 from .test_semantic_chunking import test_semantic_chunking_command
+from .test_discord_bot_enhancements import app as test_discord_bot_app
 
 app = typer.Typer(
     name="archive-rag",
@@ -37,7 +38,8 @@ def index(
     seed: int = typer.Option(42, "--seed", help="Random seed for reproducibility"),
     hash_only: bool = typer.Option(False, "--hash-only", help="Only compute SHA-256 hashes, do not index"),
     verify_hash: Optional[str] = typer.Option(None, "--verify-hash", help="Verify SHA-256 hash of input files"),
-    redact_pii: bool = typer.Option(True, "--redact-pii/--no-redact-pii", help="Enable PII detection and redaction")
+    redact_pii: bool = typer.Option(True, "--redact-pii/--no-redact-pii", help="Enable PII detection and redaction"),
+    semantic: bool = typer.Option(False, "--semantic/--no-semantic", help="Use semantic chunking (includes chunk_type, entities, relationships)")
 ):
     """Ingest meeting JSON files and create FAISS vector index."""
     index_command(
@@ -49,7 +51,8 @@ def index(
         seed=seed,
         hash_only=hash_only,
         verify_hash=verify_hash,
-        redact_pii=redact_pii
+        redact_pii=redact_pii,
+        semantic=semantic
     )
 
 
@@ -320,6 +323,9 @@ def version():
     """Show version information."""
     from .. import __version__
     typer.echo(f"Archive-RAG version {__version__}")
+
+
+app.add_typer(test_discord_bot_app, name="test-discord-bot", help="Test Discord bot enhancements")
 
 
 @app.command()

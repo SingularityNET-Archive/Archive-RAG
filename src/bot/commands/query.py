@@ -16,6 +16,7 @@ from ..services.async_query_service import AsyncQueryService
 from ..services.message_formatter import MessageFormatter
 from ..utils.message_splitter import split_answer_and_citations
 from src.services.audit_writer import AuditWriter
+from src.services.citation_verifier import verify_citations_with_entity_extraction, get_verification_error_message
 from src.lib.logging import get_logger
 
 logger = get_logger(__name__)
@@ -98,22 +99,35 @@ class QueryCommand:
         self,
         interaction: discord.Interaction,
         answer_chunks: list[str],
-        citation_chunks: list[str]
+        citation_chunks: list[str],
+        report_button_view: Optional[discord.ui.View] = None
     ) -> None:
         """
         Send response chunks to Discord channel.
         
         Sends answer chunks first, then citation chunks.
         Adds delays between messages to respect Discord rate limits.
+        Attaches report button view to the last message.
         
         Args:
             interaction: Discord interaction
             answer_chunks: List of answer text chunks
             citation_chunks: List of citation text chunks
+            report_button_view: Optional Discord view with "Report Issue" button
         """
         # Send answer chunks first (all via followup)
-        for chunk in answer_chunks:
-            await interaction.followup.send(chunk)
+        last_answer_message = None
+        for i, chunk in enumerate(answer_chunks):
+            # Attach report button to last answer chunk only if no citations
+            is_last = (i == len(answer_chunks) - 1 and not citation_chunks)
+            view = report_button_view if is_last else None
+            
+            # Only include view parameter if it's not None (Discord.py doesn't accept None)
+            if view:
+                message = await interaction.followup.send(chunk, view=view)
+                last_answer_message = message
+            else:
+                message = await interaction.followup.send(chunk)
             # Small delay between chunks
             await asyncio.sleep(0.5)
         
@@ -123,9 +137,26 @@ class QueryCommand:
             await interaction.followup.send("**Citations:**")
             await asyncio.sleep(0.5)
             
-            for chunk in citation_chunks:
-                await interaction.followup.send(chunk)
+            last_citation_message = None
+            for i, chunk in enumerate(citation_chunks):
+                # Attach report button to last citation chunk
+                is_last = (i == len(citation_chunks) - 1)
+                view = report_button_view if is_last else None
+                
+                # Only include view parameter if it's not None (Discord.py doesn't accept None)
+                if view:
+                    message = await interaction.followup.send(chunk, view=view)
+                    last_citation_message = message
+                else:
+                    message = await interaction.followup.send(chunk)
                 await asyncio.sleep(0.5)
+            
+            # Update button view with message ID from last message
+            if report_button_view and last_citation_message:
+                report_button_view.message_id = str(last_citation_message.id)
+        elif report_button_view and last_answer_message:
+            # Update button view with message ID from last answer message
+            report_button_view.message_id = str(last_answer_message.id)
     
     def _validate_query(self, query: str) -> tuple[bool, Optional[str]]:
         """
@@ -202,8 +233,8 @@ class QueryCommand:
                 )
                 return
             
-            # Send immediate acknowledgment (FR-013)
-            await interaction.response.send_message("Processing your query...")
+            # Send immediate acknowledgment (FR-013) with query text
+            await interaction.response.send_message(f"**Query:** {query}\n\nProcessing your query...")
             
             # Check rate limit (FR-010)
             is_allowed, remaining_seconds = self.rate_limiter.check_rate_limit(discord_user.user_id)
@@ -274,10 +305,40 @@ class QueryCommand:
             # Get query_id for logging
             query_id = rag_query.query_id
             
-            # Format response (FR-003)
-            answer_text, citation_strings = self.message_formatter.format_query_response(rag_query)
+            # Verify citations with entity extraction before returning results
+            # Note: For entity-based queries (topic queries, quantitative queries), entity extraction
+            # may not be required if citations reference valid meetings
+            # For RAG queries, entity extraction is required for verification
+            is_entity_query = rag_query.model_version in ("entity-query", "quantitative-query")
+            verification_result = verify_citations_with_entity_extraction(
+                rag_query.citations,
+                require_entity_extraction=not is_entity_query  # Entity queries may not have entity extraction metadata
+            )
             
-            # Handle no evidence found
+            # If verification fails, return informative error message
+            if not verification_result.is_verified:
+                error_message = get_verification_error_message(verification_result, query)
+                await interaction.followup.send(error_message)
+                logger.warning(
+                    "citation_verification_failed",
+                    user_id=discord_user.user_id,
+                    query=query,
+                    query_id=query_id,
+                    citation_count=verification_result.citation_count,
+                    valid_citation_count=verification_result.valid_citation_count,
+                    missing_citations=verification_result.missing_citations,
+                    invalid_citations=verification_result.invalid_citations,
+                    missing_entity_extraction=verification_result.missing_entity_extraction
+                )
+                return
+            
+            # Format response (FR-003) with issue report button
+            answer_text, citation_strings, report_button_view = self.message_formatter.format_query_response(
+                rag_query,
+                include_report_button=True
+            )
+            
+            # Handle no evidence found (additional check)
             if not rag_query.evidence_found:
                 error_message = self.message_formatter.format_error_message("no_evidence")
                 await interaction.followup.send(error_message)
@@ -294,8 +355,8 @@ class QueryCommand:
                     citation_strings
                 )
                 
-                # Send response chunks
-                await self._send_response_chunks(interaction, answer_chunks, citation_chunks)
+                # Send response chunks with report button on last message
+                await self._send_response_chunks(interaction, answer_chunks, citation_chunks, report_button_view)
             
             # Audit logging (FR-005, SC-006) and Performance Monitoring (T047)
             execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
@@ -338,11 +399,15 @@ class QueryCommand:
             if 'discord_user' in locals():
                 user_id = discord_user.user_id
             
+            # Log full error with traceback for debugging
+            import traceback
             logger.error(
                 "query_command_error",
                 user_id=user_id,
                 query=query,
-                error=str(e)
+                error=str(e),
+                error_type=type(e).__name__,
+                traceback=traceback.format_exc()
             )
             
             # Send generic error message
@@ -357,7 +422,7 @@ class QueryCommand:
                         self.message_formatter.format_error_message("generic")
                     )
             except Exception as send_error:
-                logger.error("failed_to_send_error_message", error=str(send_error))
+                logger.error("failed_to_send_error_message", error=str(send_error), original_error=str(e))
 
 
 def register_query_command(

@@ -54,5 +54,13 @@ def get_no_evidence_message() -> str:
     Returns:
         "No evidence found" message string
     """
-    return "No evidence found"
+    return (
+        "**No evidence found in meeting records.**\n\n"
+        "The query did not retrieve any relevant content from archived meetings. "
+        "This could mean:\n"
+        "- The question doesn't match any content in the archive\n"
+        "- The search terms need to be adjusted\n"
+        "- The relevant meetings may not be indexed yet\n\n"
+        "Please try rephrasing your question or using more specific search terms."
+    )
 

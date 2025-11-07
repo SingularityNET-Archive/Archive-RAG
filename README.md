@@ -79,6 +79,7 @@ Archive-RAG/
 - **Data Model**: [specs/001-archive-meeting-rag/data-model.md](specs/001-archive-meeting-rag/data-model.md)
 - **Quickstart Guide**: [specs/001-archive-meeting-rag/quickstart.md](specs/001-archive-meeting-rag/quickstart.md)
 - **CLI Contracts**: [specs/001-archive-meeting-rag/contracts/cli-commands.md](specs/001-archive-meeting-rag/contracts/cli-commands.md)
+- **Entity Extraction & RAG Guide**: [docs/entity-extraction-and-rag-guide.md](docs/entity-extraction-and-rag-guide.md) - Guide for integrating new JSON sources with entity extraction
 
 ## Constitution Principles
 
@@ -392,6 +393,98 @@ The system supports both:
    - "What topics were discussed in recent meetings?"
 
 All queries include proper citations with data sources and calculation methods.
+
+## Discord Bot
+
+The Archive-RAG Discord bot provides natural language access to the Archive-RAG system through Discord slash commands. Users can query meeting archives, search by topics and people, explore entity relationships, and report issues with responses.
+
+### Quick Start
+
+1. **Create a Discord Application**:
+   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
+   - Create a new application and bot user
+   - Enable "Server Members Intent" (required for role checking)
+   - Copy the bot token
+
+2. **Configure Environment**:
+   ```bash
+   export DISCORD_BOT_TOKEN="your-bot-token-here"
+   export ARCHIVE_RAG_INDEX_PATH="indexes/meetings.faiss"
+   ```
+
+3. **Start the Bot**:
+   ```bash
+   archive-rag bot
+   ```
+
+4. **Invite Bot to Server**:
+   - Use OAuth2 URL Generator in Discord Developer Portal
+   - Select scopes: `bot`, `applications.commands`
+   - Select permissions: Send Messages, Use Slash Commands
+   - Use **Guild Install** (not User Install)
+
+### Commands
+
+| Command | Access | Description |
+|---------|--------|-------------|
+| `/archive query` | Public | Ask natural language questions about archived meetings |
+| `/archive topics` | Contributor+ | Search for topics/tags in archived meetings |
+| `/archive people` | Contributor+ | Search for people/participants in archived meetings |
+| `/archive relationships` | Public | Query entity relationships (people, workgroups, meetings) |
+| `/archive list` | Public | List entities (topics, meetings by date, decisions) |
+| `/archive reports` | Admin | Review and manage issue reports (admin only) |
+
+### Features
+
+**Enhanced Citations**: All responses include enhanced citations with:
+- Semantic chunk type: (summary), (decision), (action), (attendance), (resource)
+- Entity mentions: Shows which entities are mentioned in the chunk
+- Relationship context: Shows relationships like "Person → Relationship → Object"
+- Normalized entity names: All entity names normalized to canonical forms
+
+**Issue Reporting**: Every bot response includes a "Report Issue" button for users to report incorrect or misleading information. Reports are logged for admin review with automatic spam detection.
+
+**Entity Name Normalization**: Supports searching with name variations (e.g., "Stephen [QADAO]" normalizes to "Stephen") and shows all variations that map to the canonical name.
+
+**Rate Limiting**: 10 queries per minute per user (shared across all commands).
+
+### Example Usage
+
+```
+/archive query query:"What decisions were made by workgroup in March 2025?"
+/archive relationships person:"Stephen"
+/archive topics topic:"governance"
+/archive list query:"List meetings in March 2025"
+```
+
+### Permissions
+
+- **Public**: `/archive query`, `/archive list`, `/archive relationships`
+- **Contributor+**: All public commands + `/archive topics`, `/archive people`
+- **Admin**: All commands + `/archive reports` (issue report management)
+
+To test contributor commands, create a role named "contributor" or "admin" in your Discord server and assign it to your user.
+
+### Troubleshooting
+
+**Commands not appearing?**
+- Wait up to 1 hour for Discord to sync commands globally
+- Restart the bot after adding new commands
+- Check bot logs for `bot_commands_synced` message
+- Ensure bot has "Use Slash Commands" permission
+
+**Permission denied?**
+- Verify role name is "contributor" or "admin" (case-insensitive)
+- Check bot has "Server Members Intent" enabled in Discord Developer Portal
+- Wait a few seconds for Discord to sync roles
+
+**Rate limit errors?**
+- Limit is 10 queries per minute per user
+- Wait 60 seconds for rate limit to reset
+
+For more details, see:
+- [Discord Bot Quick Reference](docs/discord-bot-quick-reference.md)
+- [Discord Bot Troubleshooting](docs/discord-bot-troubleshooting.md)
 
 ## Requirements
 
