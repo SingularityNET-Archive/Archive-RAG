@@ -81,6 +81,82 @@ Mentions:
 
 ---
 
+### `/archive relationships` (Public)
+**Access**: Everyone  
+**Purpose**: Query entity relationships (people, workgroups, meetings, decisions, action items)
+
+**Examples:**
+```
+/archive relationships person:"Stephen"
+/archive relationships workgroup:"Archives WG"
+/archive relationships meeting:"meeting-id-uuid"
+```
+
+**Response Format:**
+```
+Processing your relationship query...
+
+Entity: Stephen (normalized from 'Stephen [QADAO]')
+Type: Person
+
+Relationships (5):
+1. Stephen (Person) → attended → Meeting (Meeting)
+2. Stephen (Person) → assigned_to → ActionItem (ActionItem)
+...
+```
+
+**Note**: Supports entity name normalization - variations like "Stephen [QADAO]" normalize to "Stephen"
+
+---
+
+### `/archive list` (Public)
+**Access**: Everyone  
+**Purpose**: List entities (topics, meetings by date, etc.)
+
+**Examples:**
+```
+/archive list query:"List topics"
+/archive list query:"List meetings in March 2025"
+/archive list query:"List decisions made by workgroup in March 2025"
+```
+
+**Response Format:**
+```
+[List of topics/meetings/decisions with citations]
+```
+
+---
+
+## Enhanced Features
+
+### Enhanced Citations
+All query responses now include enhanced citations with:
+- **Semantic chunk type**: (summary), (decision), (action), (attendance), (resource)
+- **Entity mentions**: Shows which entities are mentioned in the chunk
+- **Relationship context**: Shows relationships like "Person → Relationship → Object"
+- **Normalized entity names**: All entity names are normalized to canonical forms
+
+**Example Enhanced Citation:**
+```
+[meeting_id | 2025-03-15 | Governance Workgroup] (decision) - Entities: Budget, Allocation - Stephen → attended → Meeting
+```
+
+### Issue Reporting
+Every bot response includes a **"Report Issue"** button that allows users to:
+- Report incorrect or misleading information
+- Provide feedback on bot responses
+- Help improve the system
+
+**How to Report an Issue:**
+1. Click the **"Report Issue"** button on any bot response
+2. Fill out the modal form describing what was incorrect
+3. Submit the report
+4. Receive confirmation with a report ID
+
+**Note**: Issue reports are logged for admin review. Spam detection automatically flags rapid-fire or duplicate reports.
+
+---
+
 ## Rate Limiting
 
 - **Limit**: 10 queries per minute per user
@@ -116,6 +192,11 @@ Mentions:
 - [ ] `/archive query` works
 - [ ] `/archive topics` works (with contributor role)
 - [ ] `/archive people` works (with contributor role)
+- [ ] `/archive relationships` works
+- [ ] `/archive list` works
+- [ ] Enhanced citations show chunk types and entities
+- [ ] Issue reporting button appears on responses
+- [ ] Issue reporting modal works
 - [ ] Rate limiting works (11th query gets error)
 - [ ] Error messages are clear and helpful
 
@@ -139,10 +220,8 @@ Mentions:
 
 ---
 
-## Full Documentation
+## Additional Documentation
 
-- [Testing Guide](./discord-bot-testing.md) - Basic testing instructions
-- [Testing Examples](./discord-bot-testing-examples.md) - Comprehensive test scenarios
-- [Setup Guide](./discord-bot-setup.md) - Bot setup and configuration
-- [Checklist](./discord-bot-checklist.md) - Setup checklist
+- [Troubleshooting Guide](./discord-bot-troubleshooting.md) - Common issues and solutions
+- [Main README](../README.md#discord-bot) - Complete bot documentation and setup
 

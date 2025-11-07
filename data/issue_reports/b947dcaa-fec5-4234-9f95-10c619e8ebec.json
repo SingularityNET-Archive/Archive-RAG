@@ -1,0 +1,16 @@
+{
+  "id": "b947dcaa-fec5-4234-9f95-10c619e8ebec",
+  "query_text": "Normal query",
+  "response_text": "Normal response",
+  "citations": [],
+  "user_description": "Normal issue",
+  "user_id": "123",
+  "username": "testuser",
+  "message_id": null,
+  "timestamp": "2025-11-06T03:01:16.071303",
+  "is_spam": false,
+  "spam_reason": null,
+  "is_resolved": false,
+  "admin_notes": null,
+  "resolved_at": null
+}

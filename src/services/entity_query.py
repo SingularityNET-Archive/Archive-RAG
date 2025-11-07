@@ -600,7 +600,11 @@ class EntityQueryService:
     
     def get_meetings_by_person(self, person_id: UUID) -> List[Meeting]:
         """
-        Get all meetings attended by a specific person using index file.
+        Get all meetings attended by a specific person.
+        
+        Searches both:
+        1. MeetingPerson index (if available)
+        2. Meeting host_id and documenter_id fields (fallback)
         
         Args:
             person_id: UUID of person
@@ -614,25 +618,48 @@ class EntityQueryService:
         logger.info("query_meetings_by_person_start", person_id=str(person_id))
         
         try:
-            # Load index file
-            index_data = load_index("meeting_person_by_person")
-            person_id_str = str(person_id)
-            
-            # Get meeting IDs from index
-            meeting_ids_str = index_data.get(person_id_str, [])
-            logger.debug("query_meetings_by_person_index_loaded", person_id=str(person_id), meeting_count=len(meeting_ids_str))
-            
-            # Load meeting entities
             meetings = []
-            for meeting_id_str in meeting_ids_str:
+            person_id_str = str(person_id)
+            seen_meeting_ids = set()
+            
+            # Method 1: Try index file first (if it exists)
+            try:
+                index_data = load_index("meeting_person_by_person")
+                meeting_ids_str = index_data.get(person_id_str, [])
+                logger.debug("query_meetings_by_person_index_loaded", person_id=str(person_id), meeting_count=len(meeting_ids_str))
+                
+                # Load meeting entities from index
+                for meeting_id_str in meeting_ids_str:
+                    try:
+                        meeting_id = UUID(meeting_id_str)
+                        meeting = load_entity(meeting_id, ENTITIES_MEETINGS_DIR, Meeting)
+                        if meeting and meeting.id not in seen_meeting_ids:
+                            meetings.append(meeting)
+                            seen_meeting_ids.add(meeting.id)
+                    except (ValueError, AttributeError) as e:
+                        logger.warning("query_meetings_by_person_meeting_load_failed", meeting_id=meeting_id_str, error=str(e))
+                        continue
+            except Exception as e:
+                logger.debug("query_meetings_by_person_index_failed", person_id=str(person_id), error=str(e))
+                # Continue to fallback method
+            
+            # Method 2: Fallback - search meetings by host_id and documenter_id
+            # This handles cases where MeetingPerson index doesn't exist
+            # Only use fallback if index didn't return any results (to avoid unnecessary work)
+            if not meetings:
                 try:
-                    meeting_id = UUID(meeting_id_str)
-                    meeting = load_entity(meeting_id, ENTITIES_MEETINGS_DIR, Meeting)
-                    if meeting:
-                        meetings.append(meeting)
-                except (ValueError, AttributeError) as e:
-                    logger.warning("query_meetings_by_person_meeting_load_failed", meeting_id=meeting_id_str, error=str(e))
-                    continue
+                    all_meetings = self.find_all(ENTITIES_MEETINGS_DIR, Meeting)
+                    for meeting in all_meetings:
+                        # Check if person is host or documenter
+                        if meeting.id not in seen_meeting_ids:
+                            if (meeting.host_id and meeting.host_id == person_id) or \
+                               (meeting.documenter_id and meeting.documenter_id == person_id):
+                                meetings.append(meeting)
+                                seen_meeting_ids.add(meeting.id)
+                    
+                    logger.debug("query_meetings_by_person_fallback_used", person_id=str(person_id), meeting_count=len(meetings))
+                except Exception as e:
+                    logger.warning("query_meetings_by_person_fallback_failed", person_id=str(person_id), error=str(e))
             
             logger.info("query_meetings_by_person_success", person_id=str(person_id), meeting_count=len(meetings))
             return meetings
@@ -728,6 +755,76 @@ class EntityQueryService:
             
         except Exception as e:
             logger.error("query_all_topics_failed", error=str(e))
+            raise
+    
+    def get_topics_by_workgroup(
+        self,
+        workgroup_id: UUID,
+        year: Optional[int] = None
+    ) -> List[str]:
+        """
+        Get all unique topics from tags for a specific workgroup, optionally filtered by year.
+        
+        Args:
+            workgroup_id: UUID of the workgroup
+            year: Optional year to filter by (e.g., 2025)
+        
+        Returns:
+            List of unique topic strings (sorted alphabetically)
+        """
+        logger.info("query_topics_by_workgroup_start", workgroup_id=str(workgroup_id), year=year)
+        
+        try:
+            from datetime import date
+            
+            # Get all meetings for the workgroup
+            meetings = self.get_meetings_by_workgroup(workgroup_id)
+            
+            # Filter by year if specified
+            if year is not None:
+                start_date = date(year, 1, 1)
+                end_date = date(year + 1, 1, 1)
+                meetings = [m for m in meetings if start_date <= m.date < end_date]
+            
+            # Get meeting IDs
+            meeting_ids = {m.id for m in meetings}
+            
+            # Collect topics from tags for these meetings
+            topics_set = set()
+            
+            for tag_file in ENTITIES_TAGS_DIR.glob("*.json"):
+                try:
+                    tag_id = UUID(tag_file.stem)
+                    tag = load_entity(tag_id, ENTITIES_TAGS_DIR, Tag)
+                    if not tag or not tag.topics_covered:
+                        continue
+                    
+                    # Only include topics from meetings in this workgroup
+                    if tag.meeting_id not in meeting_ids:
+                        continue
+                    
+                    # Handle both string and list formats
+                    if isinstance(tag.topics_covered, list):
+                        for topic in tag.topics_covered:
+                            if topic:
+                                topics_set.add(str(topic).strip())
+                    elif isinstance(tag.topics_covered, str):
+                        # String might be comma-separated or single value
+                        for topic in tag.topics_covered.split(","):
+                            topic = topic.strip()
+                            if topic:
+                                topics_set.add(topic)
+                                
+                except (ValueError, AttributeError) as e:
+                    logger.warning("query_topics_by_workgroup_loading_failed", tag_id=tag_file.stem, error=str(e))
+                    continue
+            
+            topics_list = sorted(list(topics_set))
+            logger.info("query_topics_by_workgroup_success", workgroup_id=str(workgroup_id), topic_count=len(topics_list), year=year)
+            return topics_list
+            
+        except Exception as e:
+            logger.error("query_topics_by_workgroup_failed", workgroup_id=str(workgroup_id), error=str(e))
             raise
     
     def get_meetings_by_date_range(

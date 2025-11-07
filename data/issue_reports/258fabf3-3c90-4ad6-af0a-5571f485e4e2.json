@@ -1,0 +1,16 @@
+{
+  "id": "258fabf3-3c90-4ad6-af0a-5571f485e4e2",
+  "query_text": "/archive list query:\"\"List meetings in January 2025\"\"",
+  "response_text": "**Meetings:** (37 total)\n\n1. [65be4a91-5149-4a82-406e-56033de6f66d | 2025-01-30 | African Guild]\n2. [b813bad7-487e-f0c4-f46a-8db254b2fa26 | 2025-01-30 | WG Sync Call]\n3. [2c4f6d27-a478-a54e-5461-a8c884c61044 | 2025-01-30 | Governance Workgroup]\n4. [a39f3ad9-f9c5-f074-874d-d41754f42333 | 2025-01-27 | Knowledge Base Workgroup]\n5. [bb765c46-9432-4204-d0eb-6e528407c909 | 2025-01-23 | African Guild]\n6. [d7061ae6-c675-02ba-9552-4a3ddf1032fd | 2025-01-23 | Governance Workgroup]\n7. [8e1d9920-a7c0-591d-ea3b-337a53472b26 | 2025-01-16 | African Guild]\n8. [e02ef15e-64e6-de78-217e-c70388ff5f29 | 2025-01-15 | Test Workgroup]\n9. [0ffbf63a-ec69-4a5f-cc07-ba89ecc638a6 | 2025-01-15 | Test Workgroup]\n10. [240f1a06-78b8-b9a2-b1a3-d6f34f929fcd | 2025-01-15 | Test Workgroup]\n11. [c44af6f3-87fa-83b6-d7b6-e10cbfb96b17 | 2025-01-15 | Test Workgroup]\n12. [f235a000-7620-3fcb-98db-c38ca2925c16 | 2025-01-15 | Test Workgroup]\n13. [350dcd12-c9bc-3d07-2568-21857046f546 | 2025-01-15 | Test Workgroup]\n14. [e04a3e69-208b-893b-dd75-2d936a6976e9 | 2025-01-15 | Test Workgroup]\n15. [29040710-b4f3-5e92-8f84-c37a425cd000 | 2025-01-15 | Test Workgroup]\n16. [5b018c7c-7c91-96b9-b30b-5ad9239a9d11 | 2025-01-15 | Test Workgroup]\n17. [37bda41d-d47a-4e2d-99e4-1227e0d9cb0e | 2025-01-15 | Test Workgroup]\n18. [13b3b715-0a6c-de8e-1579-b92490ab8c2a | 2025-01-15 | Test Workgroup]\n19. [4db2e86a-c617-5b7f-5d54-83690a564671 | 2025-01-15 | Test Workgroup]\n20. [3fcce88b-5dec-5ea8-427f-e8c39b41862c | 2025-01-15 | Test Workgroup]\n\n_(Showing first 20 of 37 meetings)_",
+  "citations": [],
+  "user_description": "Where are all the meetings ?",
+  "user_id": "815334780391915592",
+  "username": "stephenqadao",
+  "message_id": "1435835456699891834",
+  "timestamp": "2025-11-06T03:37:58.177231",
+  "is_spam": false,
+  "spam_reason": null,
+  "is_resolved": false,
+  "admin_notes": null,
+  "resolved_at": null
+}

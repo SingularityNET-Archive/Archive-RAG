@@ -13,16 +13,18 @@ class PermissionChecker:
     Permission checker service for role-based access control.
     
     Enforces role-based permissions for Discord bot commands:
-    - Public: Access to `/archive query` only
-    - Contributor: Access to `/archive query`, `/archive topics`, `/archive people`
-    - Admin: All contributor access + `/archive stats` (future)
+    - Public: Access to `/archive query`, `/archive topics`, `/archive people`, `/archive list`, `/archive relationships`
+    - Admin: Access to `/archive reports` and `/archive stats` (future)
     """
     
     # Command to role mapping
     COMMAND_ROLES: dict[str, List[str]] = {
         "archive query": [],  # Public (empty list = public access)
-        "archive topics": ["contributor", "admin"],
-        "archive people": ["contributor", "admin"],
+        "archive relationships": [],  # Public (empty list = public access)
+        "archive list": [],  # Public (empty list = public access)
+        "archive topics": [],  # Public (empty list = public access)
+        "archive people": [],  # Public (empty list = public access)
+        "archive reports": ["admin"],  # Admin-only command
         "archive stats": ["admin"],  # Future admin command
     }
     

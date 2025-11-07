@@ -21,6 +21,10 @@ class Citation(BaseModel):
     date: str = Field(..., description="Meeting date")
     workgroup_name: Optional[str] = Field(None, description="Workgroup name")
     excerpt: str = Field(..., description="Cited text excerpt")
+    # Semantic chunk metadata (Phase 7)
+    chunk_type: Optional[str] = Field(None, description="Semantic chunk type (meeting_summary, decision_record, action_item, attendance, resource)")
+    chunk_entities: Optional[List[Dict[str, Any]]] = Field(None, description="Entities mentioned in the chunk (from chunk metadata)")
+    chunk_relationships: Optional[List[Dict[str, Any]]] = Field(None, description="Relationships relevant to chunk (from chunk metadata)")
 
 
 class RAGQuery(BaseModel):
